@@ -1,0 +1,456 @@
+{
+  "name": "RAG · 1 · Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "n8nUserAuth",
+        "formTitle": "RAG · Indexer un livre",
+        "formDescription": "Dépose un livre en PDF (texte, pas scanné) et indique son titre. Extraction, nettoyage et découpage, puis chaque chunk est augmenté par l'IA et indexé un par un (sous-workflow), par lots (nœud « Limite »).\nPour reprendre l'indexation d'un livre, redépose-le avec le MÊME titre : les chunks déjà en base sont sautés.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Titre du livre",
+              "placeholder": "The Almanack of Naval Ravikant  ← toujours le même titre pour un même livre",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Livre (PDF)",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "buttonLabel": "Lancer l'indexation",
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "PDF reçu : l'indexation a démarré. Suis-la dans l'onglet Executions de n8n."
+            }
+          }
+        }
+      },
+      "id": "5c24cd18-14ae-4e5d-8258-a4cb3ebf4d86",
+      "name": "Formulaire",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Préparer le fichier =====\n// Le formulaire nomme la pièce jointe d'après le libellé du champ.\n// On la renomme en « data » pour que l'étape Extraction la trouve toujours,\n// et on calcule l'identifiant du livre (book_id) à partir de son titre :\n// minuscules, sans accents ni ponctuation, sans ce qui est entre parenthèses.\n// « Introduction to Business (OpenStax, CC BY 4.0) » → introduction-to-business\n// Le book_id préfixe chaque chunk_id : deux livres ne peuvent plus se marcher dessus,\n// et redéposer le même livre (même titre) reprend l'indexation là où elle s'était arrêtée.\nconst item = $input.first();\nconst keys = Object.keys(item.binary || {});\nif (!keys.length) throw new Error('Aucun PDF reçu depuis le formulaire.');\nconst file = item.binary[keys[0]];\n\nconst title = String(item.json['Titre du livre'] ?? '').replace(/\\s+/g, ' ').trim();\nif (!title) throw new Error('Indique le titre du livre dans le formulaire.');\nconst bookId = title\n  .replace(/\\(.*?\\)/g, ' ')\n  .normalize('NFD').replace(/[̀-ͯ]/g, '')\n  .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')\n  .slice(0, 40).replace(/-+$/, '');\nif (!bookId) throw new Error(`Titre de livre inutilisable : « ${title} ».`);\n\nreturn [{ json: { file_name: file.fileName || 'livre.pdf', book_title: title, book_id: bookId }, binary: { data: file } }];\n"
+      },
+      "id": "2df72af5-aba2-4f42-a56b-2ebd1e56187f",
+      "name": "Préparer le fichier",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Étape CLEANING (structuration + nettoyage, avant le chunking) =====\n// Code node, mode \"Run Once for All Items\"\n// Entrée : sortie de « Extraction » (Extract from File, joinPages = false) → $json.text = tableau de pages.\n// 1. Structure le texte brut en Markdown :\n//    - « # N Titre » / « ## N.0 … » au début de chaque chapitre (page « Introduction » ou ligne « Chapter N ») ;\n//    - « ## N.M Titre » pour chaque section numérotée, uniquement DANS L'ORDRE (ignore sommaire et tableaux) ;\n//    - « # Appendix X | … » et « # References » après le dernier chapitre.\n// 2. Retire le bruit de mise en page sans toucher aux titres ni aux séparateurs de page « --- » :\n//    en-têtes et pieds de page répétés (repérés automatiquement), numéros de page, crédits, filigranes.\n// Fonctionne pour d'autres livres : sections numérotées « 3.2 », chapitres « Chapter 3 », ou rien du tout\n// (le Chunking découpe alors par pages).\n\nconst NOISE_LINES = [\n  /^this openstax book is available for free at/i,   // pied de page OpenStax\n  /^access for free at openstax\\.org/i,\n  /^download for free at/i,\n  /^chapter \\d{1,2} [a-z].*$/i,                       // en-tête courant « Chapter 5 Entrepreneurship… »\n  /^appendix [a-z] \\|.*$/i,                           // en-tête courant d'une annexe\n  /^\\d{1,4}$/,                                       // numéro de page seul\n  /^figure \\d+\\.\\d+.*credit.*$/i,                    // crédits photo des figures\n  /oceanofpdf/i,                                     // filigrane de site de téléchargement\n];\nconst INLINE = [\n  /(\\bThis\\s+)?OpenStax book is available(\\s+for\\s+free\\s+at)?(\\s+https?:\\/\\/\\S*)?/gi,\n  /Access for free at openstax\\.org\\.?/gi,\n  /Download for free at\\s+\\S+/gi,\n  /\\s?\\[\\d{1,3}\\](?=[\\s.,;:!?)]|$)/g,               // renvois numérotés vers la liste des sources « [78] »\n];\n\nconst isHeading = (l) => /^#{1,6}\\s/.test(l);\nconst isPageBreak = (l) => /^\\s*---\\s*$/.test(l);\nconst nonEmpty = (p) => String(p ?? '').split('\\n').map(l => l.trim()).filter(Boolean);\n\n// ---------- Structuration : texte brut d'« Extract from File » → Markdown à titres ----------\n// Passe 1 : repère les sections numérotées dans l'ordre (pour savoir quel est le dernier chapitre\n// et quels chapitres ont des sections). Passe 2 : écrit le Markdown.\nfunction structure(pages, plan) {\n  let last = [0, 0];\n  const seen = new Set();          // sections « N.M » acceptées\n  const appendixDone = new Set();\n  let refsDone = false;\n  const lastChapter = plan ? plan.lastChapter : Infinity;\n  const isNext = (c, s) =>\n    (last[0] === 0 && c === 1 && (s === 1 || s === 0)) ||\n    (c === last[0] && (s === last[1] + 1 || s === last[1] + 2)) ||\n    (c === last[0] + 1 && (s === 1 || s === 0));\n  const afterBook = () => last[0] >= lastChapter;      // dernier chapitre atteint (annexes, références)\n\n  const out = pages.map(p => {\n    const ls = String(p ?? '').split('\\n');\n    const res = [];\n    const top = nonEmpty(p);\n    let k0 = 0;\n\n    // Début de chapitre, cas 1 : la page commence par « Introduction » et le chapitre suivant a des sections\n    // numérotées (livres OpenStax et manuels du même type).\n    const next = last[0] + 1;\n    if (plan && next <= lastChapter && top[0] === 'Introduction' && plan.seen.has(`${next}.1`) && (last[0] === 0 || last[1] >= 1)) {\n      res.push(`## ${next}.0 Introduction`);\n      last = [next, 0];\n      k0 = ls.findIndex(l => l.trim() === 'Introduction') + 1;\n    }\n    // Début de chapitre, cas 2 : ligne « Chapter N » / « Chapitre N » (seule ou suivie du titre) en haut de page.\n    if (next <= lastChapter && k0 === 0) {     // aussi en passe 1, pour connaître le dernier chapitre\n      for (let t = 0; t < Math.min(4, top.length); t++) {\n        const m = top[t].match(/^(?:chapter|chapitre)\\s+(\\d{1,2})\\s*(?:[:.\\-–—]\\s*)?([A-ZÀ-Ý].{2,120})?$/i);\n        if (!m || +m[1] !== next || (m[2] && /\\s\\d{1,4}$/.test(top[t]))) continue;   // « Titre 123 » = sommaire / en-tête\n        const title = (m[2] || top[t + 1] || '').trim();\n        res.push(`# ${next} ${title}`);\n        res.push(`## ${next}.0 ${plan && plan.seen.has(`${next}.1`) ? 'Introduction' : title}`);\n        last = [next, 0];\n        const idx = ls.findIndex(l => l.trim() === top[t]);\n        k0 = idx + 1 + (m[2] ? 0 : 1);\n        break;\n      }\n    }\n\n    for (let k = k0; k < ls.length; k++) {\n      const t = ls[k].trim();\n      let m = t.match(/^(\\d{1,2})\\.(\\d{1,2})$/);\n      if (m && isNext(+m[1], +m[2]) && +m[2] > 0) {\n        const j = ls.slice(k + 1, k + 6).findIndex(x => x.trim() && !/^[\\d.]+$/.test(x.trim()));\n        if (j >= 0) {\n          res.push(`## ${m[1]}.${m[2]} ${ls[k + 1 + j].trim()}`);\n          last = [+m[1], +m[2]]; seen.add(`${m[1]}.${m[2]}`);\n          k = k + 1 + j;\n          continue;\n        }\n      }\n      m = t.match(/^(\\d{1,2})\\.(\\d{1,2})\\s+([A-Z][^\\n•]{3,120})$/);\n      if (m && !/\\s\\d{1,4}$/.test(t) && isNext(+m[1], +m[2]) && +m[2] > 0) {\n        res.push(`## ${m[1]}.${m[2]} ${m[3].trim()}`);\n        last = [+m[1], +m[2]]; seen.add(`${m[1]}.${m[2]}`);\n        continue;\n      }\n      if (plan && afterBook()) {\n        const a = t.match(/^Appendix\\s+([A-Z])\\b\\s*[|:.\\-–—]?\\s*(.*)$/);\n        if (a && !appendixDone.has(a[1])) { res.push(`# Appendix ${a[1]} | ${a[2].replace(/[*\\s]*\\d{0,4}\\s*$/, '').trim()}`); appendixDone.add(a[1]); continue; }\n        if (!refsDone && /^(References|Bibliography|Index)$/.test(t)) { res.push('# References'); refsDone = true; continue; }\n      }\n      res.push(ls[k]);\n    }\n    return res.join('\\n');\n  });\n  return { md: out.join('\\n\\n---\\n\\n'), seen, lastChapter: last[0] };\n}\n\n// ---------- Structuration par le SOMMAIRE (livres sans numéros : essais, guides…) ----------\n// Utilisé seulement si la passe 1 n'a trouvé ni « Chapter N » ni section « N.M ».\n// 1. Lit le sommaire (« Contents », « Table of Contents », « Sommaire »…) au début du livre :\n//    « PART I: … » = partie, ligne EN MAJUSCULES = chapitre, autre ligne = section du chapitre,\n//    « Appreciation / Sources / About the author… » = fin du livre (non indexée).\n// 2. Retrouve ces titres DANS L'ORDRE dans le texte (un titre peut être coupé sur 2-3 lignes)\n//    et écrit « # N Titre », « ## N.0 Titre », « ## N.M Section » comme pour un livre numéroté.\n// Les numéros N / N.M sont internes (ordre, identifiants, filtres) : les citations montrent les titres.\nconst norm = (s) => String(s).normalize('NFKD').replace(/[^A-Za-z0-9]/g, '').toUpperCase();\nconst SMALL = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'vs']);\nconst titleCase = (s) => s.toLowerCase().split(' ')\n  .map((w, i) => (i > 0 && SMALL.has(w) ? w : w.replace(/^([(\"“'‘]?)(\\p{L})/u, (_, a, b) => a + b.toUpperCase())))\n  .join(' ');\nconst END_MATTER = /^(appreciation|acknowledge?ments?|sources|notes|endnotes|references|bibliography|index|about the authors?)$/i;\n\nfunction tocStructure(pages) {\n  // --- 1. le sommaire ---\n  const flat = [];                                   // lignes non vides : { page, text }\n  pages.forEach((p, pi) => nonEmpty(p).forEach(t => flat.push({ page: pi, text: t })));\n  const limit = Math.max(10, Math.ceil(pages.length * 0.1));\n  const start = flat.findIndex(l => l.page < limit && /^(contents|table of contents|sommaire|table des matières)$/i.test(l.text));\n  if (start < 0) return null;\n\n  const entries = [];\n  let k = start + 1;\n  for (; k < flat.length && flat[k].page <= flat[start].page + 4; k++) {\n    const t = flat[k].text.replace(/[\\s.·…]*\\d{1,4}$/, '').trim();       // « Titre ..... 12 » → « Titre »\n    if (!t || t.length > 90 || /[.!?]$/.test(t) && !/…$/.test(flat[k].text)) break;   // une phrase = le livre a commencé\n    if (entries.length >= 3) {                       // le 1er titre réapparaît (coupé ou non) : fin du sommaire\n      const first = norm(entries[0]);\n      const w = norm(t) + norm(flat[k + 1]?.text || '') + norm(flat[k + 2]?.text || '');\n      if (first.length > 3 && w.startsWith(first) && norm(t).length < first.length + 1) break;\n    }\n    entries.push(t);\n  }\n  const bodyStart = k;\n\n  let part = '', chapter = 0, section = 0, ended = false;\n  const plan = [];                                   // titres attendus dans le corps, dans l'ordre\n  for (const e of entries) {\n    if (ended) break;\n    const pm = e.match(/^part\\s+([ivx]+|\\d+)\\b[\\s:.\\-–—]*(.*)$/i);\n    if (END_MATTER.test(e)) { plan.push({ kind: 'end', text: e }); ended = true; }\n    else if (pm) { part = `Part ${pm[1].toUpperCase()}${pm[2] ? ': ' + titleCase(pm[2]) : ''}`; plan.push({ kind: 'part', text: e }); }\n    else if (!/\\p{Ll}/u.test(e)) {                   // EN MAJUSCULES = chapitre\n      if (/^(bonus|appendix|appendices|annexes?)\\b/i.test(e)) part = '';\n      chapter++; section = 0;\n      plan.push({ kind: 'chapter', text: e, n: chapter, title: titleCase(e), part });\n    } else if (chapter > 0) {\n      section++;\n      plan.push({ kind: 'section', text: e, n: chapter, s: section, title: e });\n    }\n  }\n  if (plan.filter(x => x.kind === 'chapter').length < 2) return null;\n\n  // --- 2. les titres dans le corps du livre ---\n  const titles = {}, parts = {}, missing = [];\n  let next = 0;\n  const out = pages.map(() => []);\n  const consumed = new Set();\n  for (let i = bodyStart; i < flat.length; i++) {\n    let hit = null;\n    for (let j = next; j < Math.min(plan.length, next + 4) && !hit; j++) {\n      const target = norm(plan[j].text);\n      let raw = '', w = '';\n      for (let n = 0; n < 3 && i + n < flat.length; n++) {\n        raw += (n ? ' ' : '') + flat[i + n].text; w += norm(flat[i + n].text);\n        const sameCase = !/\\p{Ll}/u.test(raw) || raw.replace(/\\s+/g, ' ') === plan[j].text;\n        if (w === target && sameCase) { hit = { j, len: n + 1 }; break; }\n        if (!target.startsWith(w)) break;\n      }\n    }\n    if (hit) {\n      for (let j = next; j < hit.j; j++) missing.push(plan[j].text);\n      const e = plan[hit.j];\n      const pg = flat[i].page;\n      if (e.kind === 'chapter') {\n        titles[e.n] = e.title; parts[e.n] = e.part;\n        out[pg].push(`# ${e.n} ${e.title}`, `## ${e.n}.0 ${e.title}`);\n      } else if (e.kind === 'section') out[pg].push(`## ${e.n}.${e.s} ${e.title}`);\n      else if (e.kind === 'end') out[pg].push('# References');\n      for (let n = 0; n < hit.len; n++) consumed.add(i + n);\n      next = hit.j + 1;\n      i += hit.len - 1;\n      continue;\n    }\n    if (!consumed.has(i)) out[flat[i].page].push(flat[i].text);\n  }\n  // les pages du sommaire et de la couverture restent (texte avant le 1er titre : ignoré par le Chunking)\n  for (let i = 0; i < bodyStart; i++) out[flat[i].page].unshift(flat[i].text);\n  return { md: out.map(ls => ls.join('\\n')).join('\\n\\n---\\n\\n'), titles, parts, missing, found: next };\n}\n\n// En-têtes / pieds de page répétés : une ligne (chiffres retirés) présente en haut ou en bas\n// d'au moins 10 % des pages (et au moins 5 pages) est du bruit de mise en page.\nfunction repeatedEdges(pages) {\n  const norm = (l) => l.replace(/\\d+/g, '#').replace(/\\s+/g, ' ').trim().toLowerCase();\n  const count = new Map();\n  for (const p of pages) {\n    const ls = nonEmpty(p);\n    const edges = new Set([...ls.slice(0, 2), ...ls.slice(-2)].map(norm).filter(x => x.length > 3));\n    for (const e of edges) count.set(e, (count.get(e) || 0) + 1);\n  }\n  const min = Math.max(5, Math.ceil(pages.length * 0.10));\n  return { norm, set: new Set([...count].filter(([, n]) => n >= min).map(([e]) => e)) };\n}\n\nlet removed = 0;\nlet mode = 'numérotée', tocTitles = null, tocParts = {}, tocMissing = [];\nconst out = $input.all().map(item => {\n  const src = item.json.text;\n  let raw, edges = { norm: (x) => x, set: new Set() };\n  if (Array.isArray(src)) {\n    const plan = structure(src, null);             // passe 1\n    const toc = plan.lastChapter === 0 && plan.seen.size === 0 ? tocStructure(src) : null;\n    if (toc) {                                     // livre sans numéros : structure lue dans le sommaire\n      raw = toc.md; mode = 'sommaire'; tocTitles = toc.titles; tocParts = toc.parts; tocMissing = toc.missing;\n    } else {\n      raw = structure(src, plan).md;               // passe 2\n      mode = plan.lastChapter > 0 ? 'numérotée' : 'pages';\n    }\n    edges = repeatedEdges(src);\n  } else {\n    raw = String(src ?? '');                       // texte déjà en Markdown : gardé tel quel\n  }\n  const before = raw.length;\n\n  const lines = raw.split('\\n').filter(l => {\n    if (isHeading(l) || isPageBreak(l)) return true;          // on garde toujours titres et sauts de page\n    const t = l.replace(/\\*\\*/g, '').trim();\n    if (edges.set.has(edges.norm(t))) return false;\n    return !NOISE_LINES.some(re => re.test(t));\n  });\n\n  // En-têtes courants collés au milieu d'une ligne (« … 170 Chapter 5 Entrepreneurship: … ») :\n  // on lit les titres de chapitre, puis on les retire en ligne.\n  const esc = (s) => s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&').replace(/\\s+/g, '\\\\s+');\n  // Priorité 1 : lignes explicites « Chapter N Titre » ; priorité 2 : titres Markdown « # N Titre ».\n  const titles = {};\n  const allLines = raw.split('\\n');\n  for (const l of allLines) {\n    const t = l.replace(/^#{1,6}\\s*/, '').replace(/\\*\\*/g, '').trim();\n    const m = t.match(/^Chapter\\s+(\\d{1,2})\\s+([A-Z][^\\n]{3,140})$/);\n    if (m && !titles[m[1]]) titles[m[1]] = m[2].replace(/\\s+\\d{1,4}$/, '').trim();\n  }\n  for (const l of allLines) {\n    if (!isHeading(l)) continue;\n    const t = l.replace(/^#{1,6}\\s*/, '').replace(/\\*\\*/g, '').trim();\n    const m = t.match(/^(\\d{1,2})\\s+([A-Z][^\\n]{3,140})$/);\n    if (m && !titles[m[1]]) titles[m[1]] = m[2].replace(/\\s+\\d{1,4}$/, '').trim();\n  }\n  const inlineHeaders = Object.entries(titles).map(([n, t]) =>\n    new RegExp(`(\\\\b\\\\d{1,4}\\\\s+)?Chapter\\\\s+${n}\\\\s+${esc(t)}(\\\\s+\\\\d{1,4}\\\\b)?`, 'g'));\n  for (const l of allLines) {\n    const a = l.match(/^# Appendix ([A-Z]) \\| (.+)$/);\n    if (a) inlineHeaders.push(new RegExp(`(\\\\b\\\\d{1,4}\\\\s+)?Appendix ${a[1]} \\\\|\\\\s+${esc(a[2].trim())}(\\\\s+\\\\d{1,4}\\\\b)?`, 'g'));\n  }\n\n  let text = lines\n    .map(l => (isHeading(l) ? l : inlineHeaders.reduce((acc, re) => acc.replace(re, ' '), l)))\n    .join('\\n');\n  for (const re of INLINE) text = text.replace(re, ' ');\n  text = text\n    .replace(/(\\w)-\\n(\\w)/g, '$1$2')     // recolle les mots coupés « busi-\\nness »\n    .replace(/[ \\t]+/g, ' ')\n    .replace(/\\n{3,}/g, '\\n\\n');\n\n  removed += before - text.length;\n  // titres de chapitre lus AVANT suppression des en-têtes courants : transmis au Chunking en secours\n  if (tocTitles) Object.assign(titles, tocTitles);\n  return { json: { text, structure: mode, chapter_titles: titles, chapter_parts: tocParts, titres_introuvables: tocMissing, caracteres_avant: before, caracteres_apres: text.length } };\n});\n\nreturn out;\n"
+      },
+      "id": "411d8fe3-16d0-4e09-9faf-a0ea71012cbb",
+      "name": "Cleaning",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Découpage aux titres (H1 / H2) + Recursive Character Text Splitter (5 000, sans overlap) =====\n// Code node, mode \"Run Once for All Items\"\n// Entrée : sortie de « Cleaning » → $json.text = Markdown du livre, pages séparées par une ligne « --- ».\n// Règle du prof :\n//   - # (H1) = chapitre, ## (H2) = section → on coupe d'abord aux titres ;\n//   - aucun morceau ne dépasse 5 000 caractères : une section trop longue est\n//     recoupée récursivement (paragraphes → lignes → phrases → mots).\n// Sécurité : on ne retient que les titres NUMÉROTÉS et DANS L'ORDRE\n// (1.0 → 1.1 → 1.2 → 2.0 → 2.1…), car certaines légendes ressemblent à des titres.\n// N.0 = introduction du chapitre (ou chapitre entier pour un livre sans sections numérotées).\n// Livre sans aucun titre repérable : découpage de secours par pages (section « p »).\n// Sortie : 1 item par chunk { text, part, chapter, chapter_title, section, section_title, structure, page, chunk_index }\n//          + un item de bilan en tête est inutile : le bilan est dans « Bilan ».\n\nconst CHUNK_SIZE = 5000;\nconst CHUNK_OVERLAP = 0;   // pas de chevauchement (choix du projet)\nconst SEPARATORS = ['\\n## ', '\\n### ', '\\n#### ', '\\n\\n', '\\n', '. ', ' ', ''];\n\n// ---------- 1. Texte complet + repérage des pages ----------\nconst md = $input.all().map(i => String(i.json.text ?? '')).join('\\n\\n---\\n\\n');\nconst lines = md.split('\\n');\nlet page = 1;\nconst linePage = lines.map(l => (/^\\s*---\\s*$/.test(l) ? ++page : page));\n\n// ---------- 2. Titres numérotés, dans l'ordre ----------\nconst clean = (l) => l.replace(/^#{1,6}\\s*/, '').replace(/\\*\\*/g, '').replace(/<[^>]+>/g, '').trim();\nconst H1 = /^(?:Chapter\\s+)?(\\d{1,2})\\s+([A-Z][^\\n]{3,140})$/;          // « 1 Understanding … » ou « Chapter 1 … »\nconst H2 = /^(\\d{1,2})\\.(\\d{1,2})\\s+([A-Z][^\\n]{2,140})$/;              // « 1.1 The Nature of Business »\nconst STOP = /^(References|Bibliography|Index)$/;\n\nconst chapterTitles = {};\n// Secours : titres transmis par le Cleaning (lus dans les en-têtes courants « Chapter N … »),\n// pour les chapitres dont l'OCR n'a pas sorti de titre #.\nconst fallbackTitles = $input.first().json.chapter_titles || {};\nconst chapterParts = $input.first().json.chapter_parts || {};   // « Part I: Wealth » (livres structurés par sommaire)\nlet STRUCTURE = $input.first().json.structure || 'numérotée';\nlet last = [0, 0];\nlet stopped = false;\nconst sections = [];\nlet cur = null;\n\nconst isNextSection = (c, s) =>\n  (c === last[0] && (s === last[1] + 1 || s === last[1] + 2)) ||\n  (c === last[0] + 1 && (s === 0 || s === 1)) ||\n  (last[0] === 0 && c === 1 && (s === 0 || s === 1));\n\nfor (let i = 0; i < lines.length && !stopped; i++) {\n  const raw = lines[i];\n  const isHeading = /^#{1,6}\\s/.test(raw);\n  const t = clean(raw);\n\n  if (isHeading && STOP.test(t) && last[0] >= 1) { stopped = true; break; }\n\n  if (isHeading) {\n    let m = t.match(H2);\n    if (m && !/\\s\\d{1,4}$/.test(t) && isNextSection(+m[1], +m[2])) {\n      if (cur) sections.push(cur);\n      last = [+m[1], +m[2]];\n      cur = { chapter: +m[1], section: `${m[1]}.${m[2]}`, section_title: m[3].trim(), lines: [] };\n      continue;\n    }\n    m = t.match(H1);\n    if (m && (+m[1] === last[0] + 1 || +m[1] === last[0]) && !chapterTitles[m[1]]) {\n      chapterTitles[m[1]] = m[2].replace(/\\s+\\d{1,4}$/, '').trim();\n      continue; // le titre de chapitre ne crée pas de section : la 1re section suit\n    }\n    const ap = t.match(/^Appendix ([A-Z])\\b\\s*[|:]?\\s*(.*)$/i);\n    if (ap && last[0] >= 1) {\n      const L = ap[1].toUpperCase();\n      if (cur && cur.section === L) continue;     // en-tête courant répété sur chaque page de l'annexe\n      if (cur) sections.push(cur);\n      cur = { chapter: L, section: L, section_title: ap[2].trim() || `Appendix ${L}`, lines: [] };\n      continue;\n    }\n  }\n  if (cur && !/^\\s*---\\s*$/.test(raw)) cur.lines.push({ line: raw, page: linePage[i] });\n}\nif (cur) sections.push(cur);\n\n// Secours : aucun titre repérable (roman, essai…) → tout le livre en une pseudo-section « p »,\n// découpée par le Recursive Character Text Splitter ; chaque chunk garde sa page de début.\nif (!sections.length) {\n  const all = lines.map((line, i) => ({ line, page: linePage[i] })).filter(l => !/^\\s*---\\s*$/.test(l.line));\n  sections.push({ chapter: '', section: 'p', section_title: '', lines: all });\n  STRUCTURE = 'pages';\n}\n\n// ---------- 3. Recursive Character Text Splitter (même algorithme que LangChain / n8n) ----------\n// On essaie les séparateurs du plus « gros » au plus fin : ## → ### → paragraphe → ligne → phrase → mot.\n// On ne coupe jamais au milieu d'un mot tant qu'un séparateur plus gros suffit.\nfunction splitRecursive(text, seps) {\n  if (text.length <= CHUNK_SIZE) return [text];\n  const sep = seps.find(s => s === '' || text.includes(s));\n  const rest = seps.slice(seps.indexOf(sep) + 1);\n  const parts = sep === ''\n    ? Array.from({ length: Math.ceil(text.length / CHUNK_SIZE) }, (_, k) => text.slice(k * CHUNK_SIZE, (k + 1) * CHUNK_SIZE))\n    : text.split(sep).map((p, k) => (k === 0 ? p : sep + p));\n  const out = [];\n  let buf = '';\n  for (const p of parts) {\n    if (p.length > CHUNK_SIZE) {\n      if (buf) { out.push(buf); buf = ''; }\n      out.push(...splitRecursive(p, rest));\n    } else if ((buf + p).length > CHUNK_SIZE) {\n      out.push(buf);\n      buf = CHUNK_OVERLAP > 0 ? buf.slice(-CHUNK_OVERLAP) + p : p;   // slice(-0) renverrait tout : on l'évite\n      if (buf.length > CHUNK_SIZE) buf = p;\n    } else {\n      buf += p;\n    }\n  }\n  if (buf.trim()) out.push(buf);\n  return out.filter(c => c.trim());\n}\n\n// ---------- 4. Un item par chunk ----------\nconst items = [];\nconst nextIndex = {};   // compteur par section sur tout le livre → chunk_id toujours unique\nfor (const s of sections) {\n  const text = s.lines.map(l => l.line).join('\\n').trim();\n  if (!text) continue;\n  const chunks = splitRecursive(text, SEPARATORS);\n  let offset = 0, cursor = 0;   // cursor : on cherche le chunk suivant APRÈS le précédent (les chunks se suivent)\n  chunks.forEach((c, idx) => {\n    // page du début du chunk : on cherche la ligne correspondante\n    const pos = text.indexOf(c.slice(0, 80), Math.max(0, cursor - CHUNK_OVERLAP));\n    if (pos >= 0) { offset = pos + (c.length - c.trimStart().length); cursor = pos + Math.max(1, c.length - 200); }   // page du 1er caractère non vide\n    let acc = 0, p = s.lines.length ? s.lines[0].page : 1;\n    for (const l of s.lines) { if (acc + l.line.length + 1 > offset) { p = l.page; break; } acc += l.line.length + 1; }\n    items.push({\n      json: {\n        text: c,\n        chapter: s.chapter,\n        chapter_title: /^[A-Z]$/.test(String(s.chapter)) ? `Appendix ${s.chapter}` : (chapterTitles[s.chapter] || fallbackTitles[s.chapter] || ''),\n        part: chapterParts[s.chapter] || '',\n        section: s.section,\n        section_title: s.section_title,\n        structure: STRUCTURE,\n        page: p,\n        chunk_index: (nextIndex[s.section] = (nextIndex[s.section] ?? -1) + 1),\n      },\n    });\n  });\n}\n\nif (!items.length) {\n  throw new Error(\"Aucun texte exploitable : le PDF est peut-être scanné (images sans texte). Vérifie la sortie du nœud « Extraction ».\");\n}\nreturn items;\n"
+      },
+      "id": "69a26fb1-f965-491b-847d-45c9f028f5ac",
+      "name": "Chunking (titres + Recursive Character 5 000)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Étape AUGMENTATION (métadonnées) =====\n// Code node, mode \"Run Once for All Items\"\n// Ajoute à chaque chunk un en-tête lisible (utile pour l'embedding et la citation)\n// et les métadonnées qui seront stockées dans Supabase.\n// Le titre et l'identifiant du livre viennent du formulaire (nœud « Préparer le fichier »).\n\nconst prep = $('Préparer le fichier').first().json;\nconst BOOK = prep.book_title;\nconst BOOK_ID = prep.book_id;\n\nreturn $input.all().map((item, i) => {\n  const j = item.json;\n  const isAppendix = /^[A-Z]$/.test(String(j.chapter));\n  const parts = [BOOK];\n  if (j.structure === 'sommaire') {\n    // Livre sans numéros : on cite les titres du livre (« Part I: Wealth › Building Wealth | How to Get Lucky »)\n    parts.push([j.part, j.chapter_title].filter(Boolean).join(' › '));\n    if (j.section && !/\\.0$/.test(j.section)) parts.push(j.section_title);\n  } else if (isAppendix) parts.push(`Appendix ${j.chapter}`);\n  else if (j.chapter !== '' && j.chapter != null) parts.push(`Chapter ${j.chapter}${j.chapter_title ? ' — ' + j.chapter_title : ''}`);\n  if (j.structure !== 'sommaire' && j.section && j.section !== 'p') parts.push(`Section ${j.section} — ${j.section_title}`);\n  parts.push(`p. ${j.page}`);\n  const header = `[${parts.join(' | ')}]`;\n\n  return {\n    json: {\n      content: `${header}\\n${j.text}`,\n      book: BOOK,\n      book_id: BOOK_ID,\n      part: j.part ?? '',\n      chapter: String(j.chapter ?? ''),\n      chapter_title: j.chapter_title ?? '',\n      section: String(j.section ?? ''),\n      section_title: j.section_title ?? '',\n      structure: j.structure ?? 'numérotée',\n      page: String(j.page),\n      chunk_id: `${BOOK_ID}:${j.section}-${j.chunk_index}`,\n      global_index: String(i),\n    },\n  };\n});\n"
+      },
+      "id": "d4a8e82c-af8f-4843-bfdd-d096fbcee1b0",
+      "name": "Augmentation (métadonnées)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "indexed_chunks",
+        "returnAll": true,
+        "orderBy": "chunk_id",
+        "filterType": "none"
+      },
+      "id": "c5c9796f-6ced-4fb7-967e-cd2fd88b5a1e",
+      "name": "Déjà indexés",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        64
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "name": "Supabase RAG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Filtrer les chunks déjà indexés (ingestion reprenable) =====\n// Code node, mode \"Run Once for All Items\"\n// « Déjà indexés » a lu dans Supabase la liste des chunk_id présents (vue indexed_chunks).\n// On ne garde que les chunks manquants : relancer l'ingestion après une coupure\n// (quota Gemini, timeout n8n…) reprend là où elle s'était arrêtée, sans doublon.\n\nconst done = new Set(\n  $('Déjà indexés').all()\n    .map(item => item.json && item.json.chunk_id)\n    .filter(Boolean)\n);\n\nconst all = $('Augmentation (métadonnées)').all();\nconst todo = all.filter(item => !done.has(item.json.chunk_id));\n\n// Rien à faire : on s'arrête proprement (aucun item → la boucle ne tourne pas).\nreturn todo;\n"
+      },
+      "id": "5fe88942-a476-4cef-8b08-80264adc724d",
+      "name": "Filtrer déjà indexés",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "RAG · 1b · Vectorisation d'un chunk (sous-workflow)"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "bbc3187f-d1d4-4caa-8eec-71cfd19065dd",
+      "name": "Vectoriser chaque chunk (sous-workflow)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        3440,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Bilan =====\n// Code node, mode \"Run Once for All Items\" : volume traité par ce run, pour CE livre.\nconst prep = $('Préparer le fichier').first().json;\nconst ids = new Set($('Augmentation (métadonnées)').all().map(i => i.json.chunk_id));\nconst total = ids.size;\nconst deja = $('Déjà indexés').all().filter(i => i.json && ids.has(i.json.chunk_id)).length;   // de ce livre seulement\nconst autres = $('Déjà indexés').all().filter(i => i.json && i.json.chunk_id && !ids.has(i.json.chunk_id)).length;\nconst envoyes = $('Limite (chunks par exécution)').all().length;     // chunks du lot\nconst augmentes = $('Assembler les chunks augmentés').all().length;  // augmentation IA lisible\nconst faits = $input.all().filter(i => i.json && i.json.statut === 'indexé').length;\nconst restants = Math.max(0, total - deja - faits);\nreturn [{ json: {\n  livre: prep.book_title,\n  livre_id: prep.book_id,\n  chunks_du_livre: total,\n  deja_indexes_avant: deja,\n  lot_ce_run: envoyes,\n  augmentes_ce_run: augmentes,\n  indexes_ce_run: faits,\n  restants,\n  autres_chunks_en_base: autres,\n  statut: restants === 0\n    ? 'Livre entièrement indexé'\n    : (deja === 0 && autres > 0\n      ? `Nouveau livre « ${prep.book_id} » : si c'est un livre déjà commencé, le titre ne correspond pas (redépose avec le même titre)`\n      : 'Lot terminé : redépose le PDF (même titre) pour indexer la suite, ou augmente la limite dans le nœud « Limite »'),\n} }];\n"
+      },
+      "id": "99201a0c-64e3-4418-843d-07bcaf39e99f",
+      "name": "Bilan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## INGESTION\n1 · Extraction : formulaire (titre + PDF) → texte page par page\n2 · Chunking : cleaning (structure Markdown, bruit retiré) → découpe aux chapitres/sections + Recursive Character Text Splitter 5 000, sans overlap\n3 · Augmentation : métadonnées (livre, chapitre, section, page) → lot de N chunks pas encore indexés → Gemini : contexte, questions hypothétiques, mots-clés, entités & relations\n4 · Vectorisation : **sous-workflow appelé une fois par chunk** (embeddings Gemini → Supabase) → Bilan",
+        "height": 190,
+        "width": 2900,
+        "color": 5
+      },
+      "id": "260d31d8-c2ce-4b82-a115-b6f7b2365980",
+      "name": "Sticky Note a7d9f84a",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {
+          "joinPages": false
+        }
+      },
+      "id": "aa198695-53c2-42cb-91c2-a9f510929025",
+      "name": "Extraction",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 100
+      },
+      "id": "8d484d51-381b-4139-92e8-90d3fd682fe7",
+      "name": "Limite (chunks par exécution)",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        64
+      ],
+      "notes": "Nombre de chunks envoyés au sous-workflow à chaque dépôt du PDF. Test : 1 ou 2, puis augmenter (50, 100… jusqu'à 600 pour tout le livre). Les chunks déjà indexés sont sautés : chaque dépôt prend les N suivants."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Assembler les chunks augmentés (étape AUGMENTATION, après « Augmentation IA (Gemini) ») =====\n// Code node, mode \"Run Once for All Items\"\n// Pour chaque chunk du lot, lit le JSON produit par Gemini (contexte, questions hypothétiques,\n// mots-clés, entités, relations) et construit le texte qui sera vectorisé :\n//   en-tête + augmentations EN TÊTE (jamais tronquées par l'embedding) puis « Passage: » + texte du livre.\n// Un chunk dont l'augmentation est illisible n'est PAS envoyé à la vectorisation : il reste « à indexer »\n// et sera retraité au prochain dépôt du PDF (ingestion reprenable). Les autres continuent.\nconst chunks = $('Limite (chunks par exécution)').all();\nconst llm = $input.all();\n\nconst str = (v, max) => String(v ?? '').replace(/\\s+/g, ' ').trim().slice(0, max);\nconst list = (v, n, max) => (Array.isArray(v) ? v : []).map(x => str(x, max)).filter(Boolean).slice(0, n);\n\nconst out = [];\nllm.forEach((item, i) => {\n  const chunk = chunks[item.pairedItem?.item ?? i]?.json;\n  if (!chunk) return;\n  // Nœud Google Gemini (sortie JSON) : le texte est dans content.parts[].text\n  const raw = String(item.json.text ?? (item.json.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join(''));\n  let a = {};\n  try { const m = raw.match(/\\{[\\s\\S]*\\}/); a = JSON.parse(m ? m[0] : raw); } catch (e) { a = {}; }\n\n  const contexte = str(a.contexte, 400);\n  const questions = list(a.questions, 5, 200);\n  const motsCles = [...new Set(list(a.mots_cles, 12, 40).map(k => k.toLowerCase()))];\n  const entites = (Array.isArray(a.entites) ? a.entites : [])\n    .map(e => (typeof e === 'string' ? { nom: e } : e || {}))\n    .map(e => ({ nom: str(e.nom, 60), type: str(e.type, 25) }))\n    .filter(e => e.nom).slice(0, 12);\n  const relations = (Array.isArray(a.relations) ? a.relations : [])\n    .map(r => r || {})\n    .map(r => ({ source: str(r.source, 60), relation: str(r.relation, 50), cible: str(r.cible, 60) }))\n    .filter(r => r.source && r.relation && r.cible).slice(0, 8);\n  if (!contexte || !questions.length || !motsCles.length) return;   // illisible → retraité au prochain dépôt\n\n  const nl = chunk.content.indexOf('\\n');\n  const header = nl > 0 ? chunk.content.slice(0, nl) : '';\n  const passage = nl > 0 ? chunk.content.slice(nl + 1) : chunk.content;\n  const blocs = [header, `Context: ${contexte}`, `Keywords: ${motsCles.join(', ')}`];\n  if (entites.length) blocs.push(`Entities: ${entites.map(e => (e.type ? `${e.nom} (${e.type})` : e.nom)).join('; ')}`);\n  if (relations.length) blocs.push(`Relations: ${relations.map(r => `${r.source} — ${r.relation} → ${r.cible}`).join('; ')}`);\n  blocs.push(`Questions this passage answers:\\n${questions.map(q => `- ${q}`).join('\\n')}`);\n  blocs.push(`Passage:\\n${passage}`);\n\n  out.push({ json: {\n    ...chunk,\n    content: blocs.join('\\n'),\n    contexte,\n    questions: questions.join(' | '),\n    mots_cles: motsCles.join(', '),\n    entites: entites.map(e => e.nom).join(', '),\n    relations: relations.map(r => `${r.source} — ${r.relation} → ${r.cible}`).join(' | '),\n    augmente: 'oui',\n  } });\n});\nreturn out;\n"
+      },
+      "id": "1222a2d1-657d-4f78-a4a4-d910f56ed1f4",
+      "name": "Assembler les chunks augmentés",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        64
+      ]
+    },
+    {
+      "id": "2a2b4dda-ab80-4477-be19-6c9c50cf544c",
+      "name": "Augmentation IA (Gemini)",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        0
+      ],
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemini-3.1-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.content }}",
+              "role": "user"
+            }
+          ]
+        },
+        "simplify": true,
+        "jsonOutput": true,
+        "options": {
+          "systemMessage": "You are the AUGMENTATION step of a RAG pipeline built on non-fiction books (business, entrepreneurship, personal development, essays).\nYou receive ONE passage of a book, preceded by a header giving the book title and, when known, its part or chapter, section and page.\nYour output will be added to the passage before it is embedded, so that a reader's question finds the right passage more easily.\n\nWrite everything in ENGLISH, based ONLY on the passage (no outside knowledge):\n1. \"contexte\": 1 or 2 sentences that situate the passage within its book and chapter and say what it explains (e.g. \"In the chapter on forms of business ownership, this passage compares sole proprietorships and partnerships, focusing on liability and taxes.\").\n2. \"questions\": 5 questions a student or a future entrepreneur could ask that THIS passage answers precisely. Vary them: definition, how-to, comparison, advantages/risks, practical example.\n3. \"mots_cles\": 8 to 12 keywords or short phrases (key terms of the passage and their usual synonyms), lowercase.\n4. \"entites\": the important entities in the passage: concepts, ideas, laws, organizations, people, companies, books, indicators, places. Each as {\"nom\": \"...\", \"type\": \"concept|idea|law|organization|person|company|book|indicator|place\"}. Maximum 12.\n5. \"relations\": up to 8 relations between those entities, each as {\"source\": \"...\", \"relation\": \"...\", \"cible\": \"...\"} (e.g. {\"source\": \"corporation\", \"relation\": \"offers\", \"cible\": \"limited liability\"}).\n\nIf the passage is only exercises, a summary list or a table of contents, still fill every field as well as you can.\nReply ONLY with valid JSON, no text around it:\n{\"contexte\": \"...\", \"questions\": [\"...\"], \"mots_cles\": [\"...\"], \"entites\": [{\"nom\": \"...\", \"type\": \"...\"}], \"relations\": [{\"source\": \"...\", \"relation\": \"...\", \"cible\": \"...\"}]}\n",
+          "temperature": 0.2,
+          "maxOutputTokens": 2048,
+          "thinkingBudget": 0
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Formulaire": {
+      "main": [
+        [
+          {
+            "node": "Préparer le fichier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleaning": {
+      "main": [
+        [
+          {
+            "node": "Chunking (titres + Recursive Character 5 000)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chunking (titres + Recursive Character 5 000)": {
+      "main": [
+        [
+          {
+            "node": "Augmentation (métadonnées)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Déjà indexés": {
+      "main": [
+        [
+          {
+            "node": "Filtrer déjà indexés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer le fichier": {
+      "main": [
+        [
+          {
+            "node": "Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraction": {
+      "main": [
+        [
+          {
+            "node": "Cleaning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrer déjà indexés": {
+      "main": [
+        [
+          {
+            "node": "Limite (chunks par exécution)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Augmentation (métadonnées)": {
+      "main": [
+        [
+          {
+            "node": "Déjà indexés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vectoriser chaque chunk (sous-workflow)": {
+      "main": [
+        [
+          {
+            "node": "Bilan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assembler les chunks augmentés": {
+      "main": [
+        [
+          {
+            "node": "Vectoriser chaque chunk (sous-workflow)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limite (chunks par exécution)": {
+      "main": [
+        [
+          {
+            "node": "Augmentation IA (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Augmentation IA (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Assembler les chunks augmentés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "nodeGroups": [
+    {
+      "id": "cded6e9c-3087-484c-9ecf-0f8c79727719",
+      "name": "1 · Extraction",
+      "nodeNames": [
+        "Préparer le fichier",
+        "Extraction"
+      ],
+      "description": "PDF → texte page par page"
+    },
+    {
+      "id": "ab059db7-adc4-489e-b7c0-651dda0e7333",
+      "name": "2 · Chunking",
+      "nodeNames": [
+        "Cleaning",
+        "Chunking (titres + Recursive Character 5 000)"
+      ],
+      "description": "Cleaning + Recursive Character 5 000 sans overlap"
+    },
+    {
+      "id": "cb6b14c4-f3f9-4b9f-afc5-8fe5ee9562f4",
+      "name": "3 · Augmentation",
+      "nodeNames": [
+        "Augmentation (métadonnées)",
+        "Déjà indexés",
+        "Filtrer déjà indexés",
+        "Limite (chunks par exécution)",
+        "Augmentation IA (Gemini)",
+        "Assembler les chunks augmentés"
+      ],
+      "description": "Métadonnées, lot à traiter, Gemini (contexte, questions, mots-clés, entités)"
+    },
+    {
+      "id": "a3a8147a-a2f4-487c-878d-836fecb70ad9",
+      "name": "4 · Vectorisation",
+      "nodeNames": [
+        "Vectoriser chaque chunk (sous-workflow)",
+        "Bilan"
+      ],
+      "description": "Sous-workflow : 1 chunk à la fois → embeddings → Supabase"
+    }
+  ]
+}
