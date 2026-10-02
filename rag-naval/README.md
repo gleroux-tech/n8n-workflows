@@ -45,7 +45,8 @@ Une réponse prend environ 6 secondes.
 ## Évaluation · `workflows/3-evaluation.json`
 
 16 questions envoyées au chatbot : 10 sur le livre, 2 de la vie réelle, 1 question de suivi et 3 hors sujet.
-Une réponse compte si ses sources citent la section attendue. Questions et résultats : [`docs/evaluation.md`](docs/evaluation.md).
+Une réponse compte si ses sources citent la section attendue.
+**Résultat : 16/16** (10/10 livre, 2/2 vie réelle, suivi réussi, 3 refus sur 3). Détail : [`docs/evaluation.md`](docs/evaluation.md).
 
 ## Contenu du dossier
 
