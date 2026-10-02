@@ -1,0 +1,324 @@
+{
+  "name": "Récap quotidien · 3. Signal de vie",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7,
+              "triggerAtMinute": 45
+            }
+          ]
+        }
+      },
+      "id": "52115b06-ecf1-41ce-8be2-91bca66547f6",
+      "name": "Schedule - Chaque matin 7h45",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KvUr1GrtbYLwf1Z7",
+          "cachedResultName": "recap_runs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "keyValue": "={{ $now.setZone('Europe/Paris').toFormat('yyyyLLdd') }}"
+            },
+            {
+              "keyName": "statut",
+              "keyValue": "ok"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "0373abf7-e3c8-414d-b31c-8a9f606cd296",
+      "name": "Data Table - Chercher récap du jour",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        208
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.run_id ?? '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "88893d2d-37d4-4af5-a9ed-2f6c3a5c51e1",
+      "name": "IF - Récap absent ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sujet",
+              "name": "sujet",
+              "value": "Récap du matin non envoyé",
+              "type": "string"
+            },
+            {
+              "id": "texte",
+              "name": "texte",
+              "value": "=Aucun récap envoyé ce matin ({{ $now.setZone('Europe/Paris').toFormat('dd/LL') }}). Vérifie les exécutions du workflow « Récap quotidien · 1. Récap matinal » dans n8n.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cd4847b9-1803-40d1-b7c8-dde1534c9b94",
+      "name": "Set - Alerte récap manquant",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        672,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "TON_CHAT_ID_TELEGRAM",
+        "text": "={{ $json.texte }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "2c66efa5-f599-42c9-84a5-b7e2dc8b560e",
+      "name": "Telegram - Envoyer alerte",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        368
+      ],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "a1a56f6a-8fb9-4c24-87cc-b6c98f739a9b",
+      "name": "Error Trigger - Échec d’un workflow récap",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sujet",
+              "name": "sujet",
+              "value": "=Échec : {{ $json.workflow.name }}",
+              "type": "string"
+            },
+            {
+              "id": "texte",
+              "name": "texte",
+              "value": "=Le workflow « {{ $json.workflow.name }} » a échoué à l’étape « {{ $json.execution.lastNodeExecuted }} » : {{ $json.execution.error.message }}\n{{ $json.execution.url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fc4d1b52-8e53-4184-9be3-868927195f52",
+      "name": "Set - Alerte échec",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "ton.adresse.perso@gmail.com",
+        "subject": "Alerte récap quotidien",
+        "emailType": "text",
+        "message": "={{ $json.texte || 'Une alerte du récap quotidien n’a pas pu partir sur Telegram. Vérifie les exécutions dans n8n.' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "179eb2cd-e848-4e98-8919-e40dcdb3c8c3",
+      "name": "Gmail - Envoyer alerte de secours",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        464
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail - Perso"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Signal de vie\nÀ 7h45, alerte si aucun récap n’est parti. Sert aussi de workflow d’erreur pour les workflows 1 et 2. Si Telegram échoue, l’alerte part par mail.",
+        "color": 4
+      },
+      "id": "9beb2615-1594-4669-9014-9ba687676261",
+      "name": "Sticky Note 10d116af",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        112,
+        304
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule - Chaque matin 7h45": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Chercher récap du jour",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger - Échec d’un workflow récap": {
+      "main": [
+        [
+          {
+            "node": "Set - Alerte échec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Chercher récap du jour": {
+      "main": [
+        [
+          {
+            "node": "IF - Récap absent ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Récap absent ?": {
+      "main": [
+        [
+          {
+            "node": "Set - Alerte récap manquant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Alerte récap manquant": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Envoyer alerte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Alerte échec": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Envoyer alerte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Envoyer alerte": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Gmail - Envoyer alerte de secours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris",
+    "binaryMode": "separate"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "nodeGroups": [
+    {
+      "id": "d2c622ae-ae09-4a77-acb2-28eed661b62b",
+      "name": "Vérification du jour",
+      "nodeNames": [
+        "Data Table - Chercher récap du jour",
+        "IF - Récap absent ?",
+        "Set - Alerte récap manquant"
+      ],
+      "description": "Cherche le passage du jour dans recap_runs et prépare une alerte s’il manque"
+    }
+  ]
+}

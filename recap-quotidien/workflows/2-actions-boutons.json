@@ -1,0 +1,1363 @@
+{
+  "name": "Récap quotidien · 2. Actions sur les boutons",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "callback_query"
+        ],
+        "additionalFields": {
+          "userIds": "TON_CHAT_ID_TELEGRAM"
+        }
+      },
+      "id": "91d57fbf-515f-4f70-85fc-05e5b8f6eb17",
+      "name": "Telegram Trigger - Clic sur bouton",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        400
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "query_id",
+              "name": "query_id",
+              "value": "={{ $json.callback_query.id }}",
+              "type": "string"
+            },
+            {
+              "id": "chat_id",
+              "name": "chat_id",
+              "value": "={{ $json.callback_query.message.chat.id }}",
+              "type": "string"
+            },
+            {
+              "id": "message_id",
+              "name": "message_id",
+              "value": "={{ $json.callback_query.message.message_id }}",
+              "type": "string"
+            },
+            {
+              "id": "bouton_id",
+              "name": "bouton_id",
+              "value": "={{ String($json.callback_query.data).split('|')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "code",
+              "name": "code",
+              "value": "={{ String($json.callback_query.data).split('|')[1] || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "64f4f57d-4e97-438a-af7e-efa853894b74",
+      "name": "Set - Lire clic",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        256,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "bUBDcv21azWIACmO",
+          "cachedResultName": "recap_boutons"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "bouton_id",
+              "keyValue": "={{ $json.bouton_id }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "7594207e-4e87-4863-ad69-b39f0b38a8f2",
+      "name": "Data Table - Retrouver bouton cliqué",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        320
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "query_id",
+              "name": "query_id",
+              "value": "={{ $('Set - Lire clic').item.json.query_id }}",
+              "type": "string"
+            },
+            {
+              "id": "chat_id",
+              "name": "chat_id",
+              "value": "={{ $('Set - Lire clic').item.json.chat_id }}",
+              "type": "string"
+            },
+            {
+              "id": "message_id",
+              "name": "message_id",
+              "value": "={{ $('Set - Lire clic').item.json.message_id }}",
+              "type": "string"
+            },
+            {
+              "id": "code",
+              "name": "code",
+              "value": "={{ $('Set - Lire clic').item.json.code }}",
+              "type": "string"
+            },
+            {
+              "id": "trouve",
+              "name": "trouve",
+              "value": "={{ !!$json.action }}",
+              "type": "boolean"
+            },
+            {
+              "id": "passe",
+              "name": "passe",
+              "value": "={{ $json.debut_rdv ? new Date($json.debut_rdv).getTime() < Date.now() : false }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "0111d478-464e-434e-8494-873ebbf5e978",
+      "name": "Set - Préparer contexte du clic",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        704,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.code }}",
+                    "rightValue": "D",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "decliner",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.statut }}",
+                    "rightValue": "^(en_attente|annule)$",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.passe }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "false",
+                      "singleValue": true
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "Décliner"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.code }}",
+                    "rightValue": "U",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "decliner",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.statut }}",
+                    "rightValue": "decline",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.passe }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "false",
+                      "singleValue": true
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "Annuler le refus"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.code }}",
+                    "rightValue": "I",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "pas_important",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.statut }}",
+                    "rightValue": "en_attente",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.passe }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "false",
+                      "singleValue": true
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "Pas important"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Refusé"
+        }
+      },
+      "id": "951edf82-5f36-4078-8ddc-96f232bf0216",
+      "name": "Switch - Type d’action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "nouveau_statut_google",
+              "name": "nouveau_statut_google",
+              "value": "={{ $json.code === 'D' ? 'declined' : ($json.statut_avant || 'needsAction') }}",
+              "type": "string"
+            },
+            {
+              "id": "statut_bouton",
+              "name": "statut_bouton",
+              "value": "={{ $json.code === 'D' ? 'decline' : 'annule' }}",
+              "type": "string"
+            },
+            {
+              "id": "texte_edit",
+              "name": "texte_edit",
+              "value": "={{ $json.code === 'D' ? 'RDV · <s>' + String($json.libelle).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</s> — décliné' : 'RDV · ' + String($json.libelle).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}",
+              "type": "string"
+            },
+            {
+              "id": "bouton_texte",
+              "name": "bouton_texte",
+              "value": "={{ $json.code === 'D' ? 'Annuler le refus' : 'Décliner' }}",
+              "type": "string"
+            },
+            {
+              "id": "bouton_cb",
+              "name": "bouton_cb",
+              "value": "={{ $json.bouton_id + ($json.code === 'D' ? '|U' : '|D') }}",
+              "type": "string"
+            },
+            {
+              "id": "notif",
+              "name": "notif",
+              "value": "={{ $json.code === 'D' ? 'Refus envoyé à l’organisateur' : 'Refus annulé' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "04154743-653d-4b09-a03e-fd2ad667fc1f",
+      "name": "Set - Préparer changement de réponse",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1104,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.compte }}",
+                    "rightValue": "perso",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "perso"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.compte }}",
+                    "rightValue": "ecole",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "ecole"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.compte }}",
+                    "rightValue": "pro",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "pro"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8073cbbe-7d5e-4948-9f6d-a53668cd429f",
+      "name": "Switch - Quel compte",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1328,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/{{ encodeURIComponent($json.calendar_id || 'primary') }}/events/{{ encodeURIComponent($json.event_id) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "options": {}
+      },
+      "id": "387ac83f-3f59-4383-85d0-d532f1aa73f6",
+      "name": "HTTP - Lire événement perso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1552,
+        80
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/{{ encodeURIComponent($('Set - Préparer changement de réponse').item.json.calendar_id || 'primary') }}/events/{{ encodeURIComponent($('Set - Préparer changement de réponse').item.json.event_id) }}?sendUpdates=all",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ attendees: ($json.attendees || []).map(a => a.self ? Object.assign({}, a, { responseStatus: $('Set - Préparer changement de réponse').item.json.nouveau_statut_google }) : a) }) }}",
+        "options": {}
+      },
+      "id": "dc7ac3ce-3da1-4a69-b8cf-3b39957dc5f9",
+      "name": "HTTP - Modifier ma réponse perso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        80
+      ],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "bUBDcv21azWIACmO",
+          "cachedResultName": "recap_boutons"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "bouton_id",
+              "keyValue": "={{ $('Set - Préparer changement de réponse').item.json.bouton_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "statut": "={{ $('Set - Préparer changement de réponse').item.json.statut_bouton }}",
+            "traite_le": "={{ $now.toISO() }}"
+          },
+          "schema": [
+            {
+              "id": "statut",
+              "displayName": "statut",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "traite_le",
+              "displayName": "traite_le",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "15d8e04e-7b2a-47c2-8bab-a315120c9a0a",
+      "name": "Data Table - Mettre à jour bouton RDV",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1984,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Set - Préparer changement de réponse').item.json.chat_id }}",
+        "messageId": "={{ $('Set - Préparer changement de réponse').item.json.message_id }}",
+        "replyMarkup": "inlineKeyboard",
+        "text": "={{ $('Set - Préparer changement de réponse').item.json.texte_edit }}",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "={{ $('Set - Préparer changement de réponse').item.json.bouton_texte }}",
+                    "additionalFields": {
+                      "callback_data": "={{ $('Set - Préparer changement de réponse').item.json.bouton_cb }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "dd75c256-7ae5-4747-9cb4-aec6fc36e1ea",
+      "name": "Telegram - Modifier message RDV",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2208,
+        240
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $('Set - Préparer changement de réponse').item.json.query_id }}",
+        "additionalFields": {
+          "text": "={{ $('Set - Préparer changement de réponse').item.json.notif }}"
+        }
+      },
+      "id": "8db422d2-f6ad-4368-abd2-5cec2a57bac8",
+      "name": "Telegram - Confirmer clic RDV",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2432,
+        240
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/{{ encodeURIComponent($json.calendar_id || 'primary') }}/events/{{ encodeURIComponent($json.event_id) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "options": {}
+      },
+      "id": "a24f5024-8b79-4549-9daa-8419c8530d49",
+      "name": "HTTP - Lire événement ecole",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1552,
+        240
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/{{ encodeURIComponent($('Set - Préparer changement de réponse').item.json.calendar_id || 'primary') }}/events/{{ encodeURIComponent($('Set - Préparer changement de réponse').item.json.event_id) }}?sendUpdates=all",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ attendees: ($json.attendees || []).map(a => a.self ? Object.assign({}, a, { responseStatus: $('Set - Préparer changement de réponse').item.json.nouveau_statut_google }) : a) }) }}",
+        "options": {}
+      },
+      "id": "e4cdb9d5-ac85-4f08-b464-fbb5809a323b",
+      "name": "HTTP - Modifier ma réponse ecole",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        240
+      ],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/{{ encodeURIComponent($json.calendar_id || 'primary') }}/events/{{ encodeURIComponent($json.event_id) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "options": {}
+      },
+      "id": "1e90a1d5-868b-4135-b1f1-ac9a60d6899e",
+      "name": "HTTP - Lire événement pro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1552,
+        400
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar - Pro"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/{{ encodeURIComponent($('Set - Préparer changement de réponse').item.json.calendar_id || 'primary') }}/events/{{ encodeURIComponent($('Set - Préparer changement de réponse').item.json.event_id) }}?sendUpdates=all",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ attendees: ($json.attendees || []).map(a => a.self ? Object.assign({}, a, { responseStatus: $('Set - Préparer changement de réponse').item.json.nouveau_statut_google }) : a) }) }}",
+        "options": {}
+      },
+      "id": "8d872929-3e73-44c5-ab64-e3666dd88e0b",
+      "name": "HTTP - Modifier ma réponse pro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        400
+      ],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar - Pro"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "texte_edit",
+              "name": "texte_edit",
+              "value": "={{ 'Mail · <s>' + String($json.libelle).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</s> — pas important' }}",
+              "type": "string"
+            },
+            {
+              "id": "notif",
+              "name": "notif",
+              "value": "Noté : ce type de mail sera écarté",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a47d910e-c04e-4578-b269-df85fe01f74c",
+      "name": "Set - Préparer mail pas important",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1104,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "vbaHh4Y3ki290cKr",
+          "cachedResultName": "recap_feedback"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "expediteur": "={{ $json.expediteur }}",
+            "objet": "={{ $json.objet }}",
+            "compte": "={{ $json.compte }}",
+            "marque_le": "={{ $now.toISO() }}"
+          },
+          "schema": [
+            {
+              "id": "expediteur",
+              "displayName": "expediteur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "objet",
+              "displayName": "objet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "compte",
+              "displayName": "compte",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "marque_le",
+              "displayName": "marque_le",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6a897ef2-11cb-479a-97e0-95687e3e688c",
+      "name": "Data Table - Ajouter exemple pas important",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "wG2eoblGHs8H4TF5",
+          "cachedResultName": "recap_mails_en_attente"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "thread_id",
+              "keyValue": "={{ $('Set - Préparer mail pas important').first().json.thread_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6eb7d4ed-804f-464d-99d0-4340a1b4146f",
+      "name": "Data Table - Retirer mail de la liste d’attente",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1552,
+        560
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "bUBDcv21azWIACmO",
+          "cachedResultName": "recap_boutons"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "bouton_id",
+              "keyValue": "={{ $('Set - Préparer mail pas important').first().json.bouton_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "statut": "traite",
+            "traite_le": "={{ $now.toISO() }}"
+          },
+          "schema": [
+            {
+              "id": "statut",
+              "displayName": "statut",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "traite_le",
+              "displayName": "traite_le",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "09b5d639-1704-4c9f-9f9f-9928f2bde7fb",
+      "name": "Data Table - Marquer bouton traité",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        560
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Set - Préparer mail pas important').first().json.chat_id }}",
+        "messageId": "={{ $('Set - Préparer mail pas important').first().json.message_id }}",
+        "text": "={{ $('Set - Préparer mail pas important').first().json.texte_edit }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "8d7c64b9-735a-4f8f-b2a4-81fbd8653697",
+      "name": "Telegram - Modifier message mail",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1984,
+        560
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $('Set - Préparer mail pas important').first().json.query_id }}",
+        "additionalFields": {
+          "text": "={{ $('Set - Préparer mail pas important').first().json.notif }}"
+        }
+      },
+      "id": "14de87e2-716e-4592-9aac-f413b261394c",
+      "name": "Telegram - Confirmer clic mail",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2208,
+        560
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $json.query_id }}",
+        "additionalFields": {
+          "text": "={{ !$json.trouve ? 'Bouton inconnu' : ($json.passe ? 'Trop tard : ce RDV a déjà commencé' : 'Déjà traité') }}"
+        }
+      },
+      "id": "81e24409-ee77-45b8-8665-29bfc1a459f8",
+      "name": "Telegram - Répondre clic refusé",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1104,
+        768
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $('Set - Préparer changement de réponse').first().json.query_id }}",
+        "additionalFields": {
+          "show_alert": true,
+          "text": "Échec de la mise à jour de l’agenda : à faire à la main"
+        }
+      },
+      "id": "f6cc568f-198a-4cbf-9fa1-2c39771a336b",
+      "name": "Telegram - Signaler échec agenda",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1984,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Actions sur les boutons\nConseil : dans « Telegram Trigger - Clic sur bouton », renseigne ton user ID Telegram dans « Restrict to User IDs » pour ignorer tout autre utilisateur.\nLes nœuds HTTP sont nécessaires : le nœud Google Agenda natif ne sait pas changer ta réponse à une invitation.",
+        "color": 4
+      },
+      "id": "88c99d52-cd4c-4409-918f-8b947aaf9c16",
+      "name": "Sticky Note 8a595c05",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        112,
+        304
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger - Clic sur bouton": {
+      "main": [
+        [
+          {
+            "node": "Set - Lire clic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Lire clic": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Retrouver bouton cliqué",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Retrouver bouton cliqué": {
+      "main": [
+        [
+          {
+            "node": "Set - Préparer contexte du clic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Préparer contexte du clic": {
+      "main": [
+        [
+          {
+            "node": "Switch - Type d’action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Type d’action": {
+      "main": [
+        [
+          {
+            "node": "Set - Préparer changement de réponse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set - Préparer changement de réponse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set - Préparer mail pas important",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Répondre clic refusé",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Préparer changement de réponse": {
+      "main": [
+        [
+          {
+            "node": "Switch - Quel compte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Quel compte": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Lire événement perso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP - Lire événement ecole",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP - Lire événement pro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Lire événement perso": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Modifier ma réponse perso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Modifier ma réponse perso": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Mettre à jour bouton RDV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Signaler échec agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Mettre à jour bouton RDV": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Modifier message RDV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Modifier message RDV": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Confirmer clic RDV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Lire événement ecole": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Modifier ma réponse ecole",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Modifier ma réponse ecole": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Mettre à jour bouton RDV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Signaler échec agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Lire événement pro": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Modifier ma réponse pro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Modifier ma réponse pro": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Mettre à jour bouton RDV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Signaler échec agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Préparer mail pas important": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Ajouter exemple pas important",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Ajouter exemple pas important": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Retirer mail de la liste d’attente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Retirer mail de la liste d’attente": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Marquer bouton traité",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Marquer bouton traité": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Modifier message mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Modifier message mail": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Confirmer clic mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris",
+    "binaryMode": "separate"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "nodeGroups": [
+    {
+      "id": "57c6d91b-e946-4fab-8648-76a70911c764",
+      "name": "Lecture du clic",
+      "nodeNames": [
+        "Set - Lire clic",
+        "Data Table - Retrouver bouton cliqué",
+        "Set - Préparer contexte du clic"
+      ],
+      "description": "Lit le bouton cliqué, le retrouve dans la table et calcule s’il est connu et encore valable"
+    },
+    {
+      "id": "3d3e0c4a-ae20-4e5b-b277-aad169be5b3f",
+      "name": "Agenda perso",
+      "nodeNames": [
+        "HTTP - Lire événement perso",
+        "HTTP - Modifier ma réponse perso"
+      ],
+      "description": "Relit l’événement puis change ma seule réponse, organisateur prévenu"
+    },
+    {
+      "id": "346679f7-56f2-4e21-80e8-ddd27a0d4feb",
+      "name": "Agenda ecole",
+      "nodeNames": [
+        "HTTP - Lire événement ecole",
+        "HTTP - Modifier ma réponse ecole"
+      ],
+      "description": "Relit l’événement puis change ma seule réponse, organisateur prévenu"
+    },
+    {
+      "id": "48c14881-2a95-4d58-a679-dc205eb628b7",
+      "name": "Agenda pro",
+      "nodeNames": [
+        "HTTP - Lire événement pro",
+        "HTTP - Modifier ma réponse pro"
+      ],
+      "description": "Relit l’événement puis change ma seule réponse, organisateur prévenu"
+    },
+    {
+      "id": "7c42727d-066c-4bf2-9586-34d26ca131a9",
+      "name": "Retour sur le RDV",
+      "nodeNames": [
+        "Data Table - Mettre à jour bouton RDV",
+        "Telegram - Modifier message RDV",
+        "Telegram - Confirmer clic RDV"
+      ],
+      "description": "Enregistre le statut, remplace le bouton (Décliner ↔ Annuler le refus) et confirme le clic"
+    },
+    {
+      "id": "c826609e-78e7-4356-b2d4-b5ebd04df19c",
+      "name": "Mail pas important",
+      "nodeNames": [
+        "Set - Préparer mail pas important",
+        "Data Table - Ajouter exemple pas important",
+        "Data Table - Retirer mail de la liste d’attente",
+        "Data Table - Marquer bouton traité",
+        "Telegram - Modifier message mail",
+        "Telegram - Confirmer clic mail"
+      ],
+      "description": "Ajoute l’exemple au feedback, retire le mail de la liste d’attente, barre le message et confirme"
+    }
+  ]
+}

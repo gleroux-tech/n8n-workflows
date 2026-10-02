@@ -1,0 +1,1384 @@
+{
+  "name": "Récap quotidien · 1. Récap matinal",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "id": "fcb83cfa-2d16-4788-a07f-c3e3adc5d04b",
+      "name": "Schedule - Chaque matin 7h30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KvUr1GrtbYLwf1Z7",
+          "cachedResultName": "recap_runs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "statut",
+              "keyValue": "ok"
+            }
+          ]
+        },
+        "limit": 1,
+        "orderBy": true
+      },
+      "id": "d383d1db-9aac-4989-ab51-15a11dc6468b",
+      "name": "Data Table - Lire dernier passage",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        288,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "wG2eoblGHs8H4TF5",
+          "cachedResultName": "recap_mails_en_attente"
+        },
+        "returnAll": true
+      },
+      "id": "e7ff3c18-f41b-4a95-92ba-43a448e057a7",
+      "name": "Data Table - Lire mails en attente",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        512,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "vbaHh4Y3ki290cKr",
+          "cachedResultName": "recap_feedback"
+        },
+        "limit": 20,
+        "orderBy": true
+      },
+      "id": "318d6806-bbd4-4ce7-8e0f-405e7d6e92ad",
+      "name": "Data Table - Lire exemples pas importants",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        736,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "ton.adresse.perso@gmail.com",
+          "mode": "list",
+          "cachedResultName": "ton.adresse.perso@gmail.com"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $today.toISO() }}",
+        "timeMax": "={{ $today.plus({ days: 2 }).toISO() }}",
+        "options": {
+          "orderBy": "startTime"
+        }
+      },
+      "id": "d86bf461-a34f-469c-aefc-6c9cea3e7983",
+      "name": "Google Agenda - Lire RDV perso",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        816,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar - Perso"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "ton.adresse@ecole.com",
+          "mode": "list",
+          "cachedResultName": "ton.adresse@ecole.com"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $today.toISO() }}",
+        "timeMax": "={{ $today.plus({ days: 2 }).toISO() }}",
+        "options": {
+          "orderBy": "startTime"
+        }
+      },
+      "id": "0a1b1874-9865-45de-8584-66ecfb0bc3b1",
+      "name": "Google Agenda - Lire RDV ecole",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar - École"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "ton.adresse@entreprise.com",
+          "mode": "list",
+          "cachedResultName": "ton.adresse@entreprise.com",
+          "cachedResultUrl": ""
+        },
+        "returnAll": true,
+        "timeMin": "={{ $today.toISO() }}",
+        "timeMax": "={{ $today.plus({ days: 2 }).toISO() }}",
+        "options": {
+          "orderBy": "startTime"
+        }
+      },
+      "id": "e22b74d2-3285-4603-b702-df6f2e9432e7",
+      "name": "Google Agenda - Lire RDV pro",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1264,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar - Pro"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 150,
+        "filters": {
+          "q": "in:inbox newer_than:14d -category:promotions -category:social -from:me",
+          "readStatus": "both"
+        }
+      },
+      "id": "c2f5db41-8d19-42c1-9441-722d6679dd8e",
+      "name": "Gmail - Lire reçus perso",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1488,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail - Perso"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 150,
+        "filters": {
+          "q": "in:sent newer_than:14d",
+          "readStatus": "both"
+        }
+      },
+      "id": "12e8b83c-ea46-4f56-8b95-b899a2348d4d",
+      "name": "Gmail - Lire envoyés perso",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1712,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail - Perso"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 150,
+        "filters": {
+          "q": "in:inbox newer_than:14d -category:promotions -category:social -from:me",
+          "readStatus": "both"
+        }
+      },
+      "id": "99ae4762-b0f5-49e6-82a5-3665e4dfa237",
+      "name": "Gmail - Lire reçus ecole",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1936,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail - École"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 150,
+        "filters": {
+          "q": "in:sent newer_than:14d",
+          "readStatus": "both"
+        }
+      },
+      "id": "2dc44f23-4feb-4242-934f-a57262ca73c1",
+      "name": "Gmail - Lire envoyés ecole",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail - École"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 150,
+        "filters": {
+          "q": "in:inbox newer_than:14d -category:promotions -category:social -from:me",
+          "readStatus": "both"
+        }
+      },
+      "id": "7544da89-41be-48c3-82d0-92657190f5ae",
+      "name": "Gmail - Lire reçus pro",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2384,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail - Pro"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 150,
+        "filters": {
+          "q": "in:sent newer_than:14d",
+          "readStatus": "both"
+        }
+      },
+      "id": "a128717e-8be7-4155-9a27-fd9e1d2c0dab",
+      "name": "Gmail - Lire envoyés pro",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2608,
+        256
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail - Pro"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const tz = 'Europe/Paris';\nconst now = DateTime.now().setZone(tz);\nconst today = now.toISODate();\nconst tomorrow = now.plus({ days: 1 }).toISODate();\n\nfunction rows(name) {\n  try {\n    return $(name).all().map(function (i) { return i.json; }).filter(function (j) { return j && Object.keys(j).length > 0; });\n  } catch (e) {\n    return [];\n  }\n}\n\nconst comptes = [\n  { compte: 'perso', cal: 'Google Agenda - Lire RDV perso', inbox: 'Gmail - Lire reçus perso', sent: 'Gmail - Lire envoyés perso' },\n  { compte: 'ecole', cal: 'Google Agenda - Lire RDV ecole', inbox: 'Gmail - Lire reçus ecole', sent: 'Gmail - Lire envoyés ecole' },\n  { compte: 'pro', cal: 'Google Agenda - Lire RDV pro', inbox: 'Gmail - Lire reçus pro', sent: 'Gmail - Lire envoyés pro' }\n];\n\nconst runs = rows('Data Table - Lire dernier passage').filter(function (r) { return r.lance_le; });\nconst lastTs = runs.length ? new Date(runs[0].lance_le).getTime() : now.minus({ days: 1 }).toMillis();\n\nconst seen = {};\nconst rdvJour = [];\nconst rdvDemain = [];\ncomptes.forEach(function (c) {\n  rows(c.cal).forEach(function (ev) {\n    if (!ev.id || ev.status === 'cancelled' || !ev.start) return;\n    const key = ev.iCalUID || ev.id;\n    if (seen[key]) return;\n    seen[key] = true;\n    const attendees = ev.attendees || [];\n    const me = attendees.find(function (a) { return a.self; });\n    if (me && me.responseStatus === 'declined') return;\n    const allDay = !ev.start.dateTime;\n    const start = allDay ? DateTime.fromISO(ev.start.date, { zone: tz }) : DateTime.fromISO(ev.start.dateTime).setZone(tz);\n    const end = allDay ? DateTime.fromISO(ev.end.date, { zone: tz }) : DateTime.fromISO(ev.end.dateTime).setZone(tz);\n    const organisateurMoi = !!(ev.organizer && ev.organizer.self);\n    const autres = attendees.filter(function (a) { return !a.self && !a.resource; }).map(function (a) { return a.displayName || a.email; });\n    const lieu = ev.location ? ev.location : (ev.hangoutLink ? 'Google Meet' : '');\n    const rdv = {\n      event_id: ev.id,\n      compte: c.compte,\n      titre: ev.summary || '(sans titre)',\n      journee: allDay,\n      debut: allDay ? '' : start.toFormat('HH:mm'),\n      fin: allDay ? '' : end.toFormat('HH:mm'),\n      debut_iso: start.toISO(),\n      fin_iso: end.toISO(),\n      lieu: lieu,\n      avec: autres.slice(0, 3).join(', '),\n      organisateur_moi: organisateurMoi,\n      mon_statut: me ? me.responseStatus : 'accepted',\n      declinable: !!me && !organisateurMoi\n    };\n    const sd = start.toISODate();\n    const ed = end.toISODate();\n    const coversToday = allDay ? (sd <= today && ed > today) : sd === today;\n    const coversTomorrow = allDay ? (sd <= tomorrow && ed > tomorrow) : sd === tomorrow;\n    if (coversToday) rdvJour.push(rdv);\n    else if (coversTomorrow) rdvDemain.push(rdv);\n  });\n});\n\nrdvJour.sort(function (a, b) {\n  if (a.journee !== b.journee) return a.journee ? -1 : 1;\n  return a.debut_iso < b.debut_iso ? -1 : (a.debut_iso > b.debut_iso ? 1 : 0);\n});\n\nconst conflits = [];\nconst timed = rdvJour.filter(function (r) { return !r.journee; });\nfor (let i = 0; i < timed.length; i++) {\n  for (let j = i + 1; j < timed.length; j++) {\n    const a = timed[i];\n    const b = timed[j];\n    if (a.debut_iso < b.fin_iso && b.debut_iso < a.fin_iso) conflits.push({ a: a, b: b });\n  }\n}\n\nconst demainTimed = rdvDemain.filter(function (r) { return !r.journee; }).sort(function (a, b) { return a.debut_iso < b.debut_iso ? -1 : 1; });\nconst demain = { nb: rdvDemain.length, premier: demainTimed.length ? demainTimed[0].debut : '' };\n\nfunction senderEmail(from) {\n  const s = String(from || '');\n  const m = s.match(/<([^>]+)>/);\n  return (m ? m[1] : s).trim().toLowerCase();\n}\nfunction senderName(from) {\n  const s = String(from || '');\n  const i = s.indexOf('<');\n  const n = (i > 0 ? s.slice(0, i) : s).replace(/\"/g, '').trim();\n  return n || senderEmail(s);\n}\n\nconst pendingByThread = {};\nrows('Data Table - Lire mails en attente').forEach(function (p) { if (p.thread_id) pendingByThread[p.thread_id] = p; });\n\nconst nouveaux = [];\nconst gardes = [];\ncomptes.forEach(function (c) {\n  const received = {};\n  const sentMax = {};\n  rows(c.sent).forEach(function (m) {\n    if (!m.threadId) return;\n    const t = Number(m.internalDate || 0);\n    if (!sentMax[m.threadId] || t > sentMax[m.threadId]) sentMax[m.threadId] = t;\n  });\n  rows(c.inbox).forEach(function (m) {\n    if (!m.threadId) return;\n    const t = Number(m.internalDate || 0);\n    if (!received[m.threadId] || t > received[m.threadId].t) received[m.threadId] = { t: t, m: m };\n  });\n  Object.keys(received).forEach(function (tid) {\n    const r = received[tid];\n    if ((sentMax[tid] || 0) > r.t) return;\n    const p = pendingByThread[tid];\n    if (p) {\n      const recu = DateTime.fromJSDate(new Date(p.recu_le)).setZone(tz);\n      gardes.push(Object.assign({}, p, { attente_jours: Math.max(0, Math.floor(now.startOf('day').diff(recu.startOf('day'), 'days').days)) }));\n      return;\n    }\n    if (r.t > lastTs) {\n      nouveaux.push({\n        id: tid,\n        compte: c.compte,\n        de: senderName(r.m.From),\n        email: senderEmail(r.m.From),\n        objet: r.m.Subject || '(sans objet)',\n        extrait: String(r.m.snippet || '').slice(0, 500),\n        recu_le: new Date(r.t).toISOString()\n      });\n    }\n  });\n});\n\nconst feedback = rows('Data Table - Lire exemples pas importants').slice(0, 20).map(function (f) { return '- ' + f.expediteur + ' | ' + f.objet + ' | ' + f.compte; }).join('\\n');\nconst payload = { mails: nouveaux.map(function (m) { return { id: m.id, compte: m.compte, de: m.de + ' <' + m.email + '>', objet: m.objet, extrait: m.extrait }; }) };\n\nreturn [{ json: { today: today, rdvJour: rdvJour, conflits: conflits, demain: demain, nouveaux: nouveaux, gardes: gardes, feedback: feedback || '(aucun)', payload: JSON.stringify(payload) } }];"
+      },
+      "id": "f9b19780-3738-4044-99ac-cc91a02a4988",
+      "name": "Code - Préparer RDV, conflits et mails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        256
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const tz = 'Europe/Paris';\nconst now = DateTime.now().setZone(tz);\nconst prep = $('Code - Préparer RDV, conflits et mails').first().json;\nconst raw = $input.first().json || {};\n\nlet txt = '';\nif (typeof raw.merged_response === 'string') txt = raw.merged_response;\nelse if (Array.isArray(raw.content)) txt = raw.content.filter(function (c) { return c.type === 'text'; }).map(function (c) { return c.text; }).join('\\n');\nelse if (typeof raw.text === 'string') txt = raw.text;\nelse if (Array.isArray(raw.output)) txt = raw.output.filter(function (o) { return o && o.type === 'message'; }).map(function (o) { return (o.content || []).filter(function (c) { return c.type === 'output_text'; }).map(function (c) { return c.text; }).join('\\n'); }).join('\\n');\nelse if (typeof raw.output === 'string') txt = raw.output;\n\nlet tri = null;\ntry {\n  const s = txt.indexOf('{');\n  const e = txt.lastIndexOf('}');\n  const parsed = JSON.parse(txt.slice(s, e + 1));\n  tri = Array.isArray(parsed.mails) ? parsed.mails : null;\n} catch (err) {\n  tri = null;\n}\n\nconst byId = {};\nprep.nouveaux.forEach(function (m) { byId[m.id] = m; });\n\nlet nouveauxGardes;\nif (tri === null) {\n  nouveauxGardes = prep.nouveaux.map(function (m) { return Object.assign({}, m, { attendu: '', priorite: 'normale', nouveau: true, attente_jours: 0 }); });\n} else {\n  nouveauxGardes = tri.filter(function (t) { return t && byId[t.id]; }).map(function (t) {\n    return Object.assign({}, byId[t.id], { attendu: t.attendu || '', priorite: t.priorite === 'haute' ? 'haute' : 'normale', nouveau: true, attente_jours: 0 });\n  });\n}\nconst anciens = prep.gardes.map(function (p) {\n  return { id: p.thread_id, compte: p.compte, de: p.de, email: p.email || '', objet: p.objet, attendu: p.attendu || '', priorite: p.priorite || 'normale', recu_le: p.recu_le, attente_jours: p.attente_jours, nouveau: false };\n});\nconst mails = nouveauxGardes.concat(anciens).sort(function (a, b) {\n  if (a.priorite !== b.priorite) return a.priorite === 'haute' ? -1 : 1;\n  return b.attente_jours - a.attente_jours;\n});\n\nfunction esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction ligneRdv(r) {\n  const h = r.journee ? 'Journée' : (r.debut + '–' + r.fin);\n  let s = h + ' ' + esc(r.titre);\n  if (r.avec) s += ' avec ' + esc(r.avec);\n  if (r.lieu) s += ', ' + esc(r.lieu);\n  s += ' (' + r.compte + (r.organisateur_moi ? ', tu organises' : '') + ')';\n  return s;\n}\n\nconst L = [];\nL.push('<b>Récap du ' + now.setLocale('fr').toFormat('cccc d LLLL') + '</b>');\nif (prep.conflits.length) {\n  L.push('');\n  L.push('<b>Conflit</b>');\n  prep.conflits.forEach(function (k) {\n    L.push('· ' + k.a.debut + ' ' + esc(k.a.titre) + ' (' + k.a.compte + ') chevauche ' + k.b.debut + ' ' + esc(k.b.titre) + ' (' + k.b.compte + ')');\n  });\n}\nL.push('');\nL.push('<b>Rendez-vous</b>');\nif (!prep.rdvJour.length) L.push('· Rien de prévu');\nprep.rdvJour.forEach(function (r) { L.push('· ' + ligneRdv(r)); });\nL.push('');\nL.push('<b>Mails en attente</b>');\nif (!mails.length) L.push('· Aucun mail en attente');\nmails.forEach(function (m) {\n  const tags = [];\n  if (m.priorite === 'haute') tags.push('[haute]');\n  tags.push(m.nouveau ? '[nouveau]' : '[' + m.attente_jours + ' j]');\n  L.push('· ' + tags.join(' ') + ' ' + esc(m.de) + ' (' + m.compte + ') — ' + esc(m.objet) + (m.attendu ? ' : ' + esc(m.attendu) : ''));\n});\nL.push('');\nL.push(prep.demain.nb ? 'Demain : ' + prep.demain.nb + ' RDV' + (prep.demain.premier ? ', premier à ' + prep.demain.premier : '') : 'Demain : rien de prévu');\nif (tri === null && prep.nouveaux.length) {\n  L.push('');\n  L.push('<i>Tri indisponible ce matin : nouveaux mails listés sans résumé.</i>');\n}\nlet texte = L.join('\\n');\nif (texte.length > 4000) texte = texte.slice(0, 3990) + '\\n…';\n\nconst runId = now.toFormat('yyyyLLdd');\nconst nowIso = now.toISO();\nconst finJour = now.endOf('day').toISO();\nconst boutons = [];\nlet n = 0;\nprep.rdvJour.filter(function (r) { return r.declinable && !r.journee && r.debut_iso > nowIso; }).forEach(function (r) {\n  n = n + 1;\n  const id = runId + '-R' + n;\n  const libelle = r.debut + ' ' + r.titre + ' (' + r.compte + ')';\n  boutons.push({\n    bouton_id: id, run_id: runId, action: 'decliner', compte: r.compte, calendar_id: 'primary', event_id: r.event_id, thread_id: '',\n    debut_rdv: r.debut_iso, libelle: libelle, statut_avant: r.mon_statut, statut: 'en_attente', expediteur: '', objet: '',\n    texte_message: 'RDV · ' + esc(libelle), bouton_texte: 'Décliner', callback: id + '|D'\n  });\n});\nmails.forEach(function (m) {\n  n = n + 1;\n  const id = runId + '-M' + n;\n  const libelle = m.de + ' — ' + m.objet + ' (' + m.compte + ')';\n  boutons.push({\n    bouton_id: id, run_id: runId, action: 'pas_important', compte: m.compte, calendar_id: '', event_id: '', thread_id: m.id,\n    debut_rdv: finJour, libelle: libelle, statut_avant: '', statut: 'en_attente', expediteur: m.email || m.de, objet: m.objet,\n    texte_message: 'Mail · ' + esc(libelle), bouton_texte: 'Pas important', callback: id + '|I'\n  });\n});\n\nconst attente = mails.map(function (m) {\n  return { thread_id: m.id, compte: m.compte, de: m.de, email: m.email || '', objet: m.objet, attendu: m.attendu, priorite: m.priorite, recu_le: m.recu_le };\n});\n\nreturn [{ json: {\n  texte: texte,\n  boutons: boutons,\n  attente: attente,\n  run: { run_id: runId, lance_le: nowIso, nb_rdv: prep.rdvJour.length, nb_mails: mails.length, elements: JSON.stringify({ rdv: prep.rdvJour, mails: mails, conflits: prep.conflits, demain: prep.demain }), statut: 'ok' }\n} }];"
+      },
+      "id": "89a5bfbc-50c3-4015-9142-1c9ea14937a0",
+      "name": "Code - Construire texte du récap",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "TON_CHAT_ID_TELEGRAM",
+        "text": "={{ (() => { const t = ($json.output || []).filter(o => o && o.type === 'message').map(o => (o.content || []).filter(c => c.type === 'output_text').map(c => c.text).join('\\n')).join('\\n').trim() || String($json.merged_response || '').trim(); return t ? t.replace(/^```[a-z]*\\n?|```$/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').slice(0, 4000) : $('Code - Construire texte du récap').first().json.texte; })() }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "297d05c2-e73d-4a28-808d-cecd79254a88",
+      "name": "Telegram - Envoyer récap",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1872,
+        256
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KvUr1GrtbYLwf1Z7",
+          "cachedResultName": "recap_runs"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "run_id": "={{ $('Code - Construire texte du récap').first().json.run.run_id }}",
+            "lance_le": "={{ $('Code - Construire texte du récap').first().json.run.lance_le }}",
+            "message_id": "={{ $json.result.message_id }}",
+            "nb_rdv": "={{ $('Code - Construire texte du récap').first().json.run.nb_rdv }}",
+            "nb_mails": "={{ $('Code - Construire texte du récap').first().json.run.nb_mails }}",
+            "elements": "={{ $('Code - Construire texte du récap').first().json.run.elements }}",
+            "statut": "ok"
+          },
+          "schema": [
+            {
+              "id": "run_id",
+              "displayName": "run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lance_le",
+              "displayName": "lance_le",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nb_rdv",
+              "displayName": "nb_rdv",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nb_mails",
+              "displayName": "nb_mails",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "elements",
+              "displayName": "elements",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "statut",
+              "displayName": "statut",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7c7da8e9-f10e-4bf0-95f9-f1e315b61ac1",
+      "name": "Data Table - Enregistrer passage",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2096,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "wG2eoblGHs8H4TF5",
+          "cachedResultName": "recap_mails_en_attente"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "thread_id",
+              "condition": "isNotEmpty"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6dfefd03-9518-4154-bfeb-bfd63a520f90",
+      "name": "Data Table - Vider liste d’attente",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2400,
+        160
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "wG2eoblGHs8H4TF5",
+          "cachedResultName": "recap_mails_en_attente"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "thread_id": "={{ $json.thread_id }}",
+            "compte": "={{ $json.compte }}",
+            "de": "={{ $json.de }}",
+            "email": "={{ $json.email }}",
+            "objet": "={{ $json.objet }}",
+            "attendu": "={{ $json.attendu }}",
+            "priorite": "={{ $json.priorite }}",
+            "recu_le": "={{ $json.recu_le }}"
+          },
+          "schema": [
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "compte",
+              "displayName": "compte",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "de",
+              "displayName": "de",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "objet",
+              "displayName": "objet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "attendu",
+              "displayName": "attendu",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priorite",
+              "displayName": "priorite",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recu_le",
+              "displayName": "recu_le",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "optimizeBulk": true
+        }
+      },
+      "id": "c714a58f-adb6-40c5-b2f2-03cbb679fd34",
+      "name": "Data Table - Enregistrer mails en attente",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2848,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "TON_CHAT_ID_TELEGRAM",
+        "text": "={{ $json.texte_message }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "={{ $json.bouton_texte }}",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.callback }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "2a7f399d-beed-4899-85ec-9cb82231770f",
+      "name": "Telegram - Envoyer message à bouton",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2624,
+        352
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "bUBDcv21azWIACmO",
+          "cachedResultName": "recap_boutons"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bouton_id": "={{ $('Split Out - Un bouton par message').item.json.bouton_id }}",
+            "run_id": "={{ $('Split Out - Un bouton par message').item.json.run_id }}",
+            "action": "={{ $('Split Out - Un bouton par message').item.json.action }}",
+            "compte": "={{ $('Split Out - Un bouton par message').item.json.compte }}",
+            "calendar_id": "={{ $('Split Out - Un bouton par message').item.json.calendar_id }}",
+            "event_id": "={{ $('Split Out - Un bouton par message').item.json.event_id }}",
+            "thread_id": "={{ $('Split Out - Un bouton par message').item.json.thread_id }}",
+            "debut_rdv": "={{ $('Split Out - Un bouton par message').item.json.debut_rdv }}",
+            "libelle": "={{ $('Split Out - Un bouton par message').item.json.libelle }}",
+            "statut_avant": "={{ $('Split Out - Un bouton par message').item.json.statut_avant }}",
+            "statut": "en_attente",
+            "expediteur": "={{ $('Split Out - Un bouton par message').item.json.expediteur }}",
+            "objet": "={{ $('Split Out - Un bouton par message').item.json.objet }}"
+          },
+          "schema": [
+            {
+              "id": "bouton_id",
+              "displayName": "bouton_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "run_id",
+              "displayName": "run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "action",
+              "displayName": "action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "compte",
+              "displayName": "compte",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "calendar_id",
+              "displayName": "calendar_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "debut_rdv",
+              "displayName": "debut_rdv",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "libelle",
+              "displayName": "libelle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "statut_avant",
+              "displayName": "statut_avant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "statut",
+              "displayName": "statut",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "expediteur",
+              "displayName": "expediteur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "objet",
+              "displayName": "objet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c14a4909-1db7-4078-98e5-5098b8ca8605",
+      "name": "Data Table - Enregistrer boutons",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2848,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Récap matinal\nAvant d’activer : connecte les credentials (3 Gmail, 3 Google Agenda, Anthropic, Telegram) et renseigne ton chat_id Telegram dans les deux nœuds Telegram.",
+        "color": 4
+      },
+      "id": "c00bed00-da94-4d30-9759-a077e0160241",
+      "name": "Sticky Note d34968e6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "attente",
+              "name": "attente",
+              "value": "={{ $('Code - Construire texte du récap').first().json.attente }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3a9406e1-c0b3-4e2d-ae77-33e5938792ef",
+      "name": "Set - Extraire mails en attente",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2624,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "attente",
+        "options": {}
+      },
+      "id": "e572f1a6-3184-45df-8fcb-e003a5e8b5c9",
+      "name": "Split Out - Un mail par ligne",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2752,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "boutons",
+              "name": "boutons",
+              "value": "={{ $('Code - Construire texte du récap').first().json.boutons }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2f4aa466-5ac1-43b4-bfbe-dbb062eef159",
+      "name": "Set - Extraire boutons",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2400,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "boutons",
+        "options": {}
+      },
+      "id": "7d8e4e91-e399-435b-b74a-949ae550c21a",
+      "name": "Split Out - Un bouton par message",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2512,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Spec — Récap quotidien\n**Objectif** : chaque matin à 7h30, un récap Telegram des RDV du jour et des mails qui attendent une réponse (perso, ecole, pro), avec un bouton pour décliner un RDV.\n\n### Objectifs\n- O1 Aucun RDV du jour raté\n- O2 Aucun mail important raté (jeu de test 3 jours)\n- O3 Pas de newsletters ni notifications\n- O4 Décliner / annuler depuis Telegram, organisateur prévenu\n- O5 Récap chaque jour, alerte à 7h45 sinon\n- O6 Conflits entre agendas en tête du récap\n\n### Affirmations (critères d'acceptation)\n- A1 Récap à 7h30 tous les jours\n- A2 Chaque RDV du jour une seule fois ; A3 RDV déclinés absents\n- A4 Chevauchements en section « Conflit » ; A5 aperçu de demain\n- A6 Nouveau mail = [nouveau] + attendu ; A7 newsletters absentes\n- A8 Mail sans réponse = [1 j], [2 j]… ; A9 disparaît une fois répondu\n- A10 [haute] en premier ; A11 récap même vide ; A12 récap sans Claude si échec\n- A13–A14 Un message à bouton par RDV déclinable et par mail\n- A15–A17 Décliner / annuler change ma seule réponse et prévient l'organisateur\n- A18 « Pas important » écarte l'expéditeur dès le lendemain\n- A19 Double clic = « Déjà traité » ; A20 après le début = « Trop tard »\n- A21 Échec agenda = alerte ; A22 notification à chaque clic\n- A23–A25 Signal de vie, alerte d'échec, repli par mail\n- A26 Aucun secret en clair ; A27 seuls les boutons modifient l'agenda\n\nSpec complète : spec-recap-quotidien.md",
+        "height": 700,
+        "width": 900,
+        "color": 6
+      },
+      "id": "1067f9b1-6629-4f2a-9c4d-52b1c8d9f47b",
+      "name": "Spec - Objectifs et affirmations",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        -768
+      ]
+    },
+    {
+      "id": "62fe40a7-e4cd-4ebb-a8e2-c9eee0f9d7ff",
+      "name": "GPT - Trier mails à répondre",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1568,
+        256
+      ],
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-6-luna"
+        },
+        "operation": "response",
+        "options": {
+          "instructions": "Tu tries les nouveaux mails de Gaspard, reçus sur 3 comptes : perso, ecole, pro.\n\nGarde uniquement ceux qui attendent une réponse ou une action de Gaspard, écrits par une vraie personne. Écarte les newsletters, publicités, reçus, confirmations, mails où il est seulement en copie sans question qui le concerne, et toutes les notifications automatiques d'outils (Asana, Notion, Slack, Google Drive, Calendly, LinkedIn, GitHub…), même quand elles mentionnent un collègue, sauf si le texte contient une demande explicite adressée à Gaspard avec une échéance.\nÉcarte aussi les mails du même type ou du même expéditeur que les exemples que Gaspard a marqués « pas importants ».\n\nPour chaque mail gardé, donne ce qui est attendu en une phrase de 15 mots maximum, et une priorité : haute (échéance proche, personne qui attend, enjeu important) ou normale.\n\nRéponds uniquement avec un objet JSON, sans texte autour ni balises de code, de la forme :\n{\"mails\":[{\"id\":\"<id reçu>\",\"attendu\":\"<phrase>\",\"priorite\":\"haute|normale\"}]}\nSi aucun mail n'est à garder, réponds {\"mails\":[]}. Utilise exactement les id reçus. N'invente aucune information absente des données.",
+          "maxTokens": 2000,
+          "reasoning": {
+            "reasoningOptions": {
+              "effort": "low",
+              "summary": "none"
+            }
+          },
+          "store": false
+        },
+        "resource": "text",
+        "responses": {
+          "values": [
+            {
+              "content": "=Nouveaux mails à trier (JSON) :\n{{ $json.payload }}\n\nMails marqués « pas importants » par Gaspard (expéditeur | objet | compte) :\n{{ $json.feedback }}",
+              "role": "user",
+              "type": "text"
+            }
+          ]
+        },
+        "simplify": true
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "7188b7d6-bf7a-4057-9b88-5243b7ccb792",
+      "name": "GPT - Rédiger récap personnalisé",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1760,
+        256
+      ],
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-6-luna"
+        },
+        "operation": "response",
+        "options": {
+          "instructions": "Tu es l'assistant personnel de Gaspard. Chaque matin, tu lui écris sur Telegram le point sur sa journée, comme un bon assistant qui le connaît bien : chaleureux, direct, utile. Tu le tutoies.\n\nContexte : trois comptes. « pro » = son alternance chez Morning (Built Ops), « ecole » = son MSc à Eugenia School, « perso » = sa vie perso.\n\nTu reçois en JSON : rdv (RDV du jour), conflits (chevauchements détectés automatiquement, bruts), mails (mails qui attendent une réponse, avec ce qui est attendu, la priorité et l'ancienneté en jours), demain (nombre de RDV et heure du premier).\n\nComment écrire :\n- Commence par « Salut Gaspard » et une phrase qui donne le ton de la journée (chargée, calme, grosse après-midi…).\n- Puis « L'essentiel » : 1 à 3 points qui comptent vraiment (un RDV avec d'autres personnes, une invitation à laquelle il n'a pas encore répondu, un mail urgent ou qui traîne depuis plusieurs jours).\n- Puis l'agenda, en liste courte et chronologique : heure, titre raccourci, avec qui (prénoms seulement, jamais d'adresse mail ; si seul un nom d'adresse est connu, écris « 3 participants » plutôt que de deviner), lieu si utile.\n- Un RDV où organisateur_moi est vrai et avec est vide est un bloc de travail ou une activité perso que Gaspard a posé lui-même, pas une réunion. Un chevauchement qui implique un tel bloc n'est PAS un conflit : ne le mentionne pas comme tel.\n- Ne signale un conflit que s'il oppose deux engagements réels (au moins un avec d'autres personnes ou une activité à heure fixe comme le sport qui tombe pendant un cours), et propose une solution concrète (décaler, écourter, choisir).\n- Mails : qui attend quoi, depuis quand. Si aucun mail n'attend, dis-le en une phrase.\n- Termine par une ligne sur demain et, si c'est pertinent, un conseil concret pour bien démarrer.\n\nContraintes : 15 lignes maximum. Texte brut uniquement, sans HTML, sans markdown, sans astérisques. Au plus un emoji par section. N'invente rien qui ne soit pas dans les données. Ne parle pas des boutons ni du fonctionnement technique.",
+          "maxTokens": 2000,
+          "reasoning": {
+            "reasoningOptions": {
+              "effort": "low",
+              "summary": "none"
+            }
+          },
+          "store": false
+        },
+        "resource": "text",
+        "responses": {
+          "values": [
+            {
+              "content": "=Date : {{ $now.setZone('Europe/Paris').setLocale('fr').toFormat('cccc d LLLL, HH:mm') }}\n\nDonnées du jour (JSON) :\n{{ (() => { const d = JSON.parse($json.run.elements || '{}'); const solo = r => r && r.organisateur_moi && !r.avec; d.conflits = (d.conflits || []).filter(c => !(solo(c.a) && solo(c.b))); return JSON.stringify(d); })() }}",
+              "role": "user",
+              "type": "text"
+            }
+          ]
+        },
+        "simplify": true
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Schedule - Chaque matin 7h30": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Lire dernier passage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Lire dernier passage": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Lire mails en attente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Lire mails en attente": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Lire exemples pas importants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Lire exemples pas importants": {
+      "main": [
+        [
+          {
+            "node": "Google Agenda - Lire RDV perso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Agenda - Lire RDV perso": {
+      "main": [
+        [
+          {
+            "node": "Google Agenda - Lire RDV ecole",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Agenda - Lire RDV ecole": {
+      "main": [
+        [
+          {
+            "node": "Google Agenda - Lire RDV pro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Agenda - Lire RDV pro": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Lire reçus perso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Lire reçus perso": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Lire envoyés perso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Lire envoyés perso": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Lire reçus ecole",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Lire reçus ecole": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Lire envoyés ecole",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Lire envoyés ecole": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Lire reçus pro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Lire reçus pro": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Lire envoyés pro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Lire envoyés pro": {
+      "main": [
+        [
+          {
+            "node": "Code - Préparer RDV, conflits et mails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Envoyer récap": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Enregistrer passage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Enregistrer passage": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Vider liste d’attente",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Set - Extraire boutons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Envoyer message à bouton": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Enregistrer boutons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table - Vider liste d’attente": {
+      "main": [
+        [
+          {
+            "node": "Set - Extraire mails en attente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Extraire mails en attente": {
+      "main": [
+        [
+          {
+            "node": "Split Out - Un mail par ligne",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out - Un mail par ligne": {
+      "main": [
+        [
+          {
+            "node": "Data Table - Enregistrer mails en attente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Extraire boutons": {
+      "main": [
+        [
+          {
+            "node": "Split Out - Un bouton par message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out - Un bouton par message": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Envoyer message à bouton",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Préparer RDV, conflits et mails": {
+      "main": [
+        [
+          {
+            "node": "GPT - Trier mails à répondre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT - Trier mails à répondre": {
+      "main": [
+        [
+          {
+            "node": "Code - Construire texte du récap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Construire texte du récap": {
+      "main": [
+        [
+          {
+            "node": "GPT - Rédiger récap personnalisé",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT - Rédiger récap personnalisé": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Envoyer récap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris",
+    "binaryMode": "separate"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "nodeGroups": [
+    {
+      "id": "2fd92ed5-38ed-4808-b94c-82d195395559",
+      "name": "Lecture de l’état",
+      "nodeNames": [
+        "Data Table - Lire dernier passage",
+        "Data Table - Lire mails en attente",
+        "Data Table - Lire exemples pas importants"
+      ],
+      "description": "Dernier passage, mails déjà en attente et exemples « pas importants »"
+    },
+    {
+      "id": "002e9634-1227-49c3-8102-203413834624",
+      "name": "Collecte des 3 comptes",
+      "nodeNames": [
+        "Google Agenda - Lire RDV perso",
+        "Google Agenda - Lire RDV ecole",
+        "Google Agenda - Lire RDV pro",
+        "Gmail - Lire reçus perso",
+        "Gmail - Lire envoyés perso",
+        "Gmail - Lire reçus ecole",
+        "Gmail - Lire envoyés ecole",
+        "Gmail - Lire reçus pro",
+        "Gmail - Lire envoyés pro"
+      ],
+      "description": "Agendas d’aujourd’hui et demain, mails reçus et envoyés sur 14 jours, pour perso, ecole et pro"
+    },
+    {
+      "id": "c75c512e-3288-49a2-b71a-4ca418d815d3",
+      "name": "Tri et mise en forme",
+      "nodeNames": [
+        "Code - Préparer RDV, conflits et mails",
+        "GPT - Trier mails à répondre",
+        "Code - Construire texte du récap",
+        "GPT - Rédiger récap personnalisé"
+      ],
+      "description": "Données en code ; GPT-6 Luna trie les mails puis rédige le récap comme un assistant"
+    },
+    {
+      "id": "6c1e0351-492f-4c7f-9c17-a1437258b9f2",
+      "name": "Envoi du récap",
+      "nodeNames": [
+        "Telegram - Envoyer récap",
+        "Data Table - Enregistrer passage"
+      ],
+      "description": "Envoie le récap Telegram et enregistre le passage du jour"
+    },
+    {
+      "id": "b7fd5ded-e988-49a8-ab90-728dd6456e6f",
+      "name": "Liste d’attente",
+      "nodeNames": [
+        "Data Table - Vider liste d’attente",
+        "Set - Extraire mails en attente",
+        "Split Out - Un mail par ligne",
+        "Data Table - Enregistrer mails en attente"
+      ],
+      "description": "Remplace la liste des mails en attente par celle du jour"
+    },
+    {
+      "id": "784c518a-c8e6-4acb-9e47-853b2ffc21ee",
+      "name": "Messages à boutons",
+      "nodeNames": [
+        "Set - Extraire boutons",
+        "Split Out - Un bouton par message",
+        "Telegram - Envoyer message à bouton",
+        "Data Table - Enregistrer boutons"
+      ],
+      "description": "Un message silencieux par RDV déclinable et par mail, avec son bouton"
+    }
+  ]
+}
