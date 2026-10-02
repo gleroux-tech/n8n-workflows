@@ -1,0 +1,136 @@
+{
+  "name": "RAG · 3 · Évaluation du chatbot",
+  "nodes": [
+    {
+      "id": "d1ca2f6a-4af7-4746-b370-fe6f197e5cef",
+      "name": "Lancer l'évaluation",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "f4833450-6cad-4ef4-954c-0b5d80c49a02",
+      "name": "Jeu de test",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ===== Jeu de test =====\n// Code node, mode \"Run Once for All Items\"\n// 16 appels au chatbot :\n//  - 10 questions « livre »        → réponse attendue, qui cite une des sections listées dans `attendu`\n//  - 2 questions « vie réelle »    → idem, formulées sans le vocabulaire du livre\n//  - 1 question de suivi           → même session que la première (teste la mémoire)\n//  - 3 questions hors sujet        → refus attendu\n// Les sessions sont préfixées par l'heure du run pour ne pas hériter de l'historique d'un run précédent.\n\nconst run = `eval-${Date.now()}`;\nconst cases = [\n  { id: 'L1',  kind: 'livre',      question: \"C'est quoi le savoir spécifique selon Naval ?\", attendu: ['Find and Build Specific Knowledge'], session: 'suivi' },\n  { id: 'S1',  kind: 'suivi',      question: 'Et comment on le développe concrètement ?', attendu: ['Find and Build Specific Knowledge', 'Find Work That Feels Like Play'], session: 'suivi' },\n  { id: 'L2',  kind: 'livre',      question: 'Quels sont les différents types de levier dont parle Naval ?', attendu: ['Find a Position of Leverage'] },\n  { id: 'L3',  kind: 'livre',      question: 'Pourquoi faut-il jouer des jeux à long terme avec des gens fiables ?', attendu: ['Play Long-Term Games with Long-Term People'] },\n  { id: 'L4',  kind: 'livre',      question: 'Comment Naval définit-il la chance, et comment la provoquer ?', attendu: ['How to Get Lucky'] },\n  { id: 'L5',  kind: 'livre',      question: \"Pourquoi faut-il posséder des parts d'une entreprise pour devenir riche ?\", attendu: ['Build or Buy Equity in a Business', 'Understand How Wealth Is Created'] },\n  { id: 'L6',  kind: 'livre',      question: 'Comment prendre de meilleures décisions selon Naval ?', attendu: ['Learn the Skills of Decision-Making', 'Judgment', 'Collect Mental Models', 'How to Think Clearly'] },\n  { id: 'L7',  kind: 'livre',      question: 'Pourquoi Naval conseille-t-il de lire autant ?', attendu: ['Learn to Love to Read'] },\n  { id: 'L8',  kind: 'livre',      question: \"Le bonheur est-il une compétence qui s'apprend ?\", attendu: ['Happiness Is Learned', 'Happiness Is a Choice', 'Learning Happiness'] },\n  { id: 'L9',  kind: 'livre',      question: 'Pourquoi Naval dit-il que chaque désir rend malheureux ?', attendu: ['Every Desire Is a Chosen Unhappiness'] },\n  { id: 'L10', kind: 'livre',      question: 'Quel rôle joue la méditation dans la vie de Naval ?', attendu: ['Meditation + Mental Strength'] },\n  { id: 'R1',  kind: 'vie réelle', question: 'Je bosse 60 h par semaine et je ne deviens pas riche, je fais quoi ?', attendu: ['Understand How Wealth Is Created', 'Find a Position of Leverage', 'Build or Buy Equity in a Business', 'Get Paid for Your Judgment', 'Building Wealth'] },\n  { id: 'R2',  kind: 'vie réelle', question: 'Je compare tout le temps ma vie à celle des autres, comment arrêter ?', attendu: ['Envy Is the Enemy of Happiness', 'Success Does Not Earn Happiness', 'Learning Happiness'] },\n  { id: 'H1',  kind: 'hors sujet', question: 'Donne-moi la recette des crêpes bretonnes.', refuse: true },\n  { id: 'H2',  kind: 'hors sujet', question: 'Qui a gagné la Coupe du monde de football 2018 ?', refuse: true },\n  { id: 'H3',  kind: 'hors sujet', question: 'Écris-moi un poème sur la mer.', refuse: true },\n];\n\nreturn cases.map(c => ({\n  json: {\n    ...c,\n    refuse: Boolean(c.refuse),\n    attendu: c.attendu || [],\n    sessionId: `${run}-${c.session || c.id}`,\n  },\n}));\n"
+      }
+    },
+    {
+      "id": "4244e909-ed93-482f-b2f0-2fb9d9aab529",
+      "name": "Appel du chatbot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://TON-INSTANCE.app.n8n.cloud/webhook/ID-DU-CHAT/chat",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ action: 'sendMessage', sessionId: $json.sessionId, chatInput: $json.question }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 15000
+            }
+          },
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "b7491231-593c-4ce9-a710-dbd18a9203f4",
+      "name": "Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ===== Score =====\n// Code node, mode \"Run Once for All Items\"\n// Associe chaque cas du « Jeu de test » à la réponse du chatbot (même ordre), puis calcule le score.\n// Une réponse est bonne si elle ne refuse pas ET cite dans ses sources une des sections attendues.\n// Le premier item est le résumé, les suivants le détail.\n\nconst cases = $('Jeu de test').all().map(i => i.json);\nconst answers = $input.all().map(i => i.json);\n\nconst REFUSAL = /ne traite pas|uniquement à partir|sort de ce cadre|n'aborde pas|ne couvre pas|pas dans (le|ce) livre/i;\nconst low = (s) => String(s).toLowerCase().replace(/[’']/g, \"'\");\n\nconst rows = cases.map((c, i) => {\n  const a = answers[i] || {};\n  const text = String(a.output ?? a.text ?? a.message ?? (a.error ? `ERREUR : ${JSON.stringify(a.error)}` : JSON.stringify(a)));\n  const sources = text.slice(Math.max(0, text.search(/sources\\s*:/i)));     // la ligne « 📖 Sources : … »\n  const refused = REFUSAL.test(text);\n  const cites = c.attendu.filter(t => low(sources).includes(low(t)));\n  const ok = c.refuse ? refused : (!refused && cites.length > 0);\n  let why = '';\n  if (!ok) {\n    if (c.refuse) why = \"n'a pas refusé\";\n    else if (refused) why = 'refus à tort';\n    else why = `sources sans section attendue (${c.attendu.join(' / ')})`;\n  }\n  return { id: c.id, type: c.kind, question: c.question, ok, why, sections_citees: cites.join(', '), reponse: text.slice(0, 500) };\n});\n\nconst pick = (kinds) => rows.filter(r => kinds.includes(r.type));\nconst rate = (list) => `${list.filter(r => r.ok).length}/${list.length}`;\nconst inBook = pick(['livre', 'vie réelle']);\nconst inBookOk = inBook.filter(r => r.ok).length;\n\nconst summary = {\n  id: 'RÉSUMÉ',\n  questions_livre: rate(pick(['livre'])),\n  questions_vie_reelle: rate(pick(['vie réelle'])),\n  question_de_suivi: rate(pick(['suivi'])),\n  refus_hors_sujet: rate(pick(['hors sujet'])),\n  objectif_80_pourcent: inBookOk / inBook.length >= 0.8 ? 'ATTEINT' : 'NON ATTEINT',\n  objectif_3_refus_sur_3: pick(['hors sujet']).every(r => r.ok) ? 'ATTEINT' : 'NON ATTEINT',\n  echecs: rows.filter(r => !r.ok).map(r => `${r.id} : ${r.why}`).join(' | ') || 'aucun',\n};\n\nreturn [{ json: summary }, ...rows.map(r => ({ json: r }))];\n"
+      }
+    },
+    {
+      "id": "734365ba-7002-4f9a-ab57-04e0c2dc7e47",
+      "name": "Sticky Note 0149b049",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -260
+      ],
+      "parameters": {
+        "content": "## ÉVALUATION\n16 appels au chatbot public (1 toutes les 15 s), puis score.\nUne réponse est bonne si elle cite dans ses sources une des sections attendues du livre de Naval.\nObjectifs : au moins 80 % de bonnes réponses (livre + vie réelle), 3 refus sur 3.\nLe chatbot doit être **actif**. Durée : environ 5 minutes. Résultat : premier item du nœud « Score ».",
+        "color": 6,
+        "width": 1100,
+        "height": 180
+      }
+    }
+  ],
+  "connections": {
+    "Lancer l'évaluation": {
+      "main": [
+        [
+          {
+            "node": "Jeu de test",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jeu de test": {
+      "main": [
+        [
+          {
+            "node": "Appel du chatbot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Appel du chatbot": {
+      "main": [
+        [
+          {
+            "node": "Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
