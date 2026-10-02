@@ -26,10 +26,12 @@ Objectifs : au moins 80 % de bonnes réponses sur les 12 questions livre + vie r
 
 ## Résultats
 
-Run du 2 octobre 2026, livre entièrement indexé (82 chunks) :
+Dernier run (2 octobre 2026), avec les prompts XML et gemini-flash-lite-latest, livre entièrement indexé (82 chunks) :
 
 | Questions livre | Vie réelle | Suivi (mémoire) | Refus hors sujet |
 |---|---|---|---|
 | 10/10 | 2/2 | 1/1 | 3/3 |
 
 Les deux objectifs sont atteints. Chaque réponse cite au moins une section attendue ; les trois questions hors sujet reçoivent le message de refus.
+
+Ce même jeu de test a servi à valider le passage aux prompts XML : un premier run est tombé à 12/16 parce que la réflexion du modèle consommait le budget de tokens et coupait la ligne de sources. Après correction (budget relevé, titre « Specific » réparé dans la base), retour à 16/16.

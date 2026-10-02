@@ -11,7 +11,7 @@ Il cite la partie, la section et la page de chaque passage utilisé, et refuse p
 |---|---|---|
 | Extraction | Formulaire (titre + PDF), texte page par page | Form Trigger, Extract from File |
 | Chunking | Nettoyage, structure lue dans le sommaire (partie › chapitre › section), découpe à 5 000 caractères sans overlap : 82 chunks | Code JS |
-| Augmentation | Par chunk : contexte, 5 questions hypothétiques, mots-clés, entités et relations | Gemini 3.1 Flash-Lite |
+| Augmentation | Par chunk : contexte, 5 questions hypothétiques, mots-clés, entités et relations | Gemini Flash-Lite (latest) |
 | Vectorisation | Un chunk = une exécution du sous-workflow `1b`, embedding de 3 072 dimensions | Gemini embedding-001, Supabase pgvector |
 
 ## Answering · `workflows/2-answering.json`
@@ -19,12 +19,12 @@ Il cite la partie, la section et la page de chaque passage utilisé, et refuse p
 | Étape | Ce qui se passe | Outil |
 |---|---|---|
 | Contexte | Question + 4 derniers échanges + réglages | Postgres |
-| Routing | Question autonome FR/EN, requête, mots-clés, filtre de partie, détection du hors-sujet | Gemini 3.5 Flash-Lite (JSON) |
+| Routing | Question autonome FR/EN, requête, mots-clés, filtre de partie, détection du hors-sujet | Gemini Flash-Lite (latest), JSON |
 | Search | 15 passages par le sens + 15 par les mots, fusionnés (Reciprocal Rank Fusion) | pgvector, plein texte Postgres |
 | Reranking | Garde les 4 passages qui répondent vraiment (score ≥ 0,1) | Cohere rerank-v3.5 |
-| Génération | Réponse de 250 mots max, suivie de ses sources | Gemini 3.5 Flash-Lite |
+| Génération | Réponse de 250 mots max, suivie de ses sources | Gemini Flash-Lite (latest) |
 
-Une réponse prend environ 6 secondes.
+Une réponse prend environ 10 secondes.
 
 ## Choix techniques
 
@@ -32,6 +32,7 @@ Une réponse prend environ 6 secondes.
 - **Augmentation avant vectorisation** : les questions hypothétiques rapprochent la question de l'utilisateur du bon passage.
 - **Recherche hybride** : le sens rate les termes exacts, les mots ratent les reformulations ; la fusion RRF garde le meilleur des deux.
 - **Reranker dédié plutôt qu'un LLM** : environ 0,5 s, et un score fiable qui sert aussi de seuil de refus.
+- **Prompts en XML** (`prompts/`) : rôle, entrée, sortie, règles et 3 à 5 exemples, dont des paires proches mais contrastées (ex. livres recommandés par Naval / livres de Harry Potter). Température 0 et top_p 0,95 pour le routing et la génération, 0,3 pour l'augmentation.
 - **Ingestion reprenable** : `chunk_id` unique ; on redépose le PDF et seuls les chunks manquants sont traités, même après une panne de l'API.
 
 ## Lancer le projet

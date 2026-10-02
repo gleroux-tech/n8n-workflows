@@ -142,6 +142,14 @@ function tocStructure(pages) {
   }
   const bodyStart = k;
 
+  // Ligatures « fi » / « fl » mal extraites du PDF : « Specif ic » → « Specific »
+  // (on recolle seulement si le mot entier est plus fréquent dans le livre que le morceau seul)
+  const freq = new Map();
+  for (const l of flat) for (const w of l.text.toLowerCase().match(/[a-z]+/g) || []) freq.set(w, (freq.get(w) || 0) + 1);
+  const fixLig = (s) => s.replace(/\b([A-Za-z]*f) ([il][a-z]+)\b/g, (m, a, b) =>
+    ((freq.get((a + b).toLowerCase()) || 0) > (freq.get(b.toLowerCase()) || 0) ? a + b : m));
+  for (let i = 0; i < entries.length; i++) entries[i] = fixLig(entries[i]);
+
   let part = '', chapter = 0, section = 0, ended = false;
   const plan = [];                                   // titres attendus dans le corps, dans l'ordre
   for (const e of entries) {
