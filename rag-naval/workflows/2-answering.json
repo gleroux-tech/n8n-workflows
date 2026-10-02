@@ -1,0 +1,620 @@
+{
+  "name": "RAG · 2 · Answering (chatbot)",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Bonjour 👋 Je réponds à partir du livre « The Almanack of Naval Ravikant » (Eric Jorgenson) : richesse, levier, jugement, bonheur.\nPose-moi ta question.",
+        "options": {
+          "inputPlaceholder": "Ex. : c'est quoi le savoir spécifique ?",
+          "subtitle": "Réponses tirées de The Almanack of Naval Ravikant (Eric Jorgenson), avec sources",
+          "title": "Naval · RAG",
+          "responseMode": "lastNode"
+        }
+      },
+      "id": "6b738304-5f6a-4cf7-ab2b-a1fa0d8dccba",
+      "name": "Question reçue",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== 1. CONTEXTE (messages + config) =====\n// Code node, mode \"Run Once for All Items\"\n// Rassemble ce dont les étapes suivantes ont besoin :\n//   - messages : la question + les 4 derniers échanges de la session (table chat_messages) ;\n//   - config   : réglages de la recherche, modifiables ici sans toucher aux autres nœuds.\nconst CONFIG = {\n  top_k: 15,          // passages ramenés par chaque recherche (vecteurs, mots-clés)\n  max_candidats: 20,  // passages envoyés au reranker après fusion\n  top_n: 4,           // passages gardés pour la génération\n  seuil: 0.1,         // score Cohere minimum (0 → 1) pour qu'un passage soit gardé\n  rerank_model: 'rerank-v3.5',\n};\n\nconst q = $('Question reçue').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r && r.role && r.content);\nconst history = rows\n  .slice(-8)\n  .map(r => `${r.role === 'user' ? 'Utilisateur' : 'Assistant'} : ${String(r.content).slice(0, 600)}`)\n  .join('\\n');\n\nreturn [{ json: {\n  sessionId: q.sessionId,\n  question: q.chatInput,\n  history: history || '(aucun échange précédent)',\n  config: CONFIG,\n} }];\n"
+      },
+      "id": "3deb1623-82c6-4b5b-b5b2-2c9f2e64e0fc",
+      "name": "Contexte",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Parse routing =====\n// Lit le JSON de l'étape Routing (Gemini) de façon tolérante et prépare la recherche :\n//   - query_en      : requête pour la recherche vectorielle ;\n//   - question_en   : question complète en anglais, pour le reranker ;\n//   - mots_cles     : requête de la recherche plein texte ;\n//   - filtre        : métadonnées imposées (chapitre cité explicitement), {} sinon.\n// Filtre permissif : seul un in_scope explicitement false déclenche le refus.\n// Nœud Google Gemini (sortie JSON) : le texte est dans content.parts[].text\nconst j0 = $input.first().json;\nconst raw = String(j0.text ?? (j0.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join(''));\nconst ctx = $('Contexte').first().json;\n\nlet r = {};\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  r = JSON.parse(m ? m[0] : raw);\n} catch (e) {\n  r = {};\n}\n\nconst standalone = String(r.standalone_fr || ctx.question).trim();\nconst queryEn = String(r.query_en || standalone).trim();\nconst motsCles = (Array.isArray(r.mots_cles_en) ? r.mots_cles_en : []).map(String).filter(Boolean).slice(0, 12);\nconst filtre = {};\nconst ch = r.filtres && r.filtres.chapitre;\nif (ch !== null && ch !== undefined && /^\\d{1,2}$/.test(String(ch).trim())) filtre.chapter = String(ch).trim();\n\nreturn [{ json: {\n  sessionId: ctx.sessionId,\n  question: ctx.question,\n  standalone_fr: standalone,\n  in_scope: r.in_scope !== false,\n  query_en: queryEn,\n  question_en: String(r.question_en || queryEn).trim(),\n  mots_cles: [queryEn, ...motsCles].join(' '),\n  filtre,\n  config: ctx.config,\n} }];\n"
+      },
+      "id": "5c4c5d4d-ddea-4fa6-9e4e-6f23cfce3f4e",
+      "name": "Parse routing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fef1dac4-f067-41eb-b4ca-9267c51087d8",
+              "leftValue": "={{ $json.in_scope }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "89e43af7-6edf-4554-bc93-2c4c1a29c733",
+      "name": "Dans le périmètre ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1280,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "load",
+        "tableName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "documents"
+        },
+        "prompt": "={{ $json.query_en }}",
+        "topK": "={{ $json.config.top_k }}",
+        "options": {
+          "queryName": "match_documents"
+        }
+      },
+      "id": "3d8348ec-a28a-4f1e-94a7-63be683f43f5",
+      "name": "Recherche",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        -96
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "name": "Supabase RAG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-embedding-001"
+      },
+      "id": "893cf5da-4514-4384-a7cf-fdd800243d49",
+      "name": "Embeddings Gemini",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1640,
+        136
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Candidats (fin de l'étape SEARCH, recherche hybride) =====\n// Code node, mode \"Run Once for All Items\"\n// Fusionne deux listes de passages :\n//   - « Recherche »            : les plus proches par le sens (embeddings Gemini, pgvector) ;\n//   - « Recherche mots-clés »  : les meilleurs par les mots (plein texte sur le contenu augmenté).\n// Fusion par Reciprocal Rank Fusion : score = Σ 1 / (60 + rang). Le filtre du routing (ex. chapitre)\n// est aussi appliqué aux résultats vectoriels. Pour chaque passage :\n//   - doc     : texte envoyé au reranker (contexte de l'augmentation + passage) ;\n//   - passage : texte du livre seul, pour la génération.\nconst sel = $('Parse routing').first().json;\nconst K = 60;\nconst MAX = sel.config.max_candidats;\nconst filtre = sel.filtre || {};\n\nconst read = (j) => {\n  const doc = j.document || j;\n  return { content: String(doc.pageContent ?? doc.content ?? ''), meta: doc.metadata || {} };\n};\nconst okFiltre = (meta) => Object.entries(filtre).every(([k, v]) => String(meta[k] ?? '') === String(v));\n\nconst pool = new Map();\nconst add = (items, source) => {\n  let rank = 0;\n  for (const item of items) {\n    const { content, meta } = read(item.json || {});\n    if (!content || !okFiltre(meta)) continue;\n    const id = meta.chunk_id || content.slice(0, 120);\n    const cur = pool.get(id) || { content, meta, rrf: 0, sources: [] };\n    cur.rrf += 1 / (K + ++rank);\n    cur.sources.push(source);\n    pool.set(id, cur);\n  }\n};\nadd($('Recherche').all(), 'sens');\nadd($input.all(), 'mots-clés');\n\n// Découpe le contenu augmenté : « [en-tête] / Context / Keywords / … / Passage: texte »\nconst split = (content) => {\n  const i = content.indexOf('\\nPassage:\\n');\n  if (i < 0) {\n    const nl = content.indexOf('\\n');\n    return { header: nl > 0 ? content.slice(0, nl) : '', passage: nl > 0 ? content.slice(nl + 1) : content, contexte: '' };\n  }\n  const head = content.slice(0, i);\n  return {\n    header: head.split('\\n')[0],\n    contexte: (head.match(/\\nContext: (.*)/) || [])[1] || '',\n    passage: content.slice(i + '\\nPassage:\\n'.length),\n  };\n};\n\nconst candidates = [...pool.values()]\n  .sort((a, b) => b.rrf - a.rrf)\n  .slice(0, MAX)\n  .map((c, i) => {\n    const s = split(c.content);\n    return {\n      n: i,\n      doc: [s.header, s.contexte, s.passage].filter(Boolean).join('\\n').slice(0, 4000),\n      passage: s.passage,\n      book: c.meta.book ?? '',\n      part: c.meta.part ?? '',\n      chapter: c.meta.chapter ?? '',\n      chapter_title: c.meta.chapter_title ?? '',\n      section: c.meta.section ?? '',\n      section_title: c.meta.section_title ?? '',\n      structure: c.meta.structure ?? '',\n      page: c.meta.page ?? '',\n      trouve_par: c.sources.join(' + '),\n      rrf: Number(c.rrf.toFixed(4)),\n    };\n  });\n\nreturn [{ json: {\n  question: sel.standalone_fr || sel.question,\n  question_en: sel.question_en,\n  candidates,\n  documents: candidates.map(c => c.doc),\n  config: sel.config,\n} }];\n"
+      },
+      "id": "7eab2659-c688-4037-a436-b952a0169535",
+      "name": "Candidats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2144,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Top N (fin de l'étape RERANKING) =====\n// Code node, mode \"Run Once for All Items\"\n// Lit les scores du reranker Cohere ({ results: [{ index, relevance_score }] }) et garde\n// au plus top_n passages dont le score dépasse le seuil (config du nœud « Contexte »).\n// Si Cohere n'a pas répondu (erreur, quota), on garde les top_n de la fusion RRF : le chat continue.\nconst prev = $('Candidats').first().json;\nconst { top_n, seuil } = prev.config;\nconst res = $input.first().json || {};\n\nlet kept, mode;\nif (Array.isArray(res.results)) {\n  mode = 'cohere';\n  kept = res.results\n    .filter(r => r.relevance_score >= seuil)\n    .sort((a, b) => b.relevance_score - a.relevance_score)\n    .slice(0, top_n)\n    .map(r => ({ ...prev.candidates[r.index], score: Number(r.relevance_score.toFixed(3)) }));\n} else {\n  mode = 'secours RRF (Cohere indisponible)';\n  kept = prev.candidates.slice(0, top_n);\n}\n\n// Référence de source : livre, chapitre (ou annexe), section (si le livre en a), page.\n// Livre structuré par son sommaire : livre, partie › chapitre › section, page.\nconst short = (t) => String(t || '').replace(/\\s*\\(.*?\\)\\s*/g, ' ').trim();\nconst label = (c) => {\n  if (c.structure === 'sommaire') {               // livre sans numéros : on cite ses titres\n    const where = [c.part, c.chapter_title, /\\.0$/.test(String(c.section)) ? '' : c.section_title].filter(Boolean).join(' › ');\n    return [c.book && `« ${short(c.book)} »`, where, `p. ${c.page}`].filter(Boolean).join(', ');\n  }\n  const appendix = /^[A-Z]$/.test(String(c.chapter));\n  return [\n    c.book && `« ${short(c.book)} »`,\n    appendix ? `annexe ${c.chapter}` : (c.chapter !== '' && c.chapter != null ? `chapitre ${c.chapter}${c.chapter_title ? ' « ' + c.chapter_title + ' »' : ''}` : ''),\n    c.section && c.section !== 'p' && !appendix ? `section ${c.section} « ${c.section_title} »` : '',\n    `p. ${c.page}`,\n  ].filter(Boolean).join(', ');\n};\n\nconst context = kept.length\n  ? kept.map(c => `[Source : ${label(c)}]\\n${c.passage}`).join('\\n\\n---\\n\\n')\n  : 'AUCUN PASSAGE PERTINENT';\n\nreturn [{ json: {\n  question: prev.question,\n  context,\n  sources_count: kept.length,\n  reranking: mode,\n  scores: kept.map(c => ({ section: c.section, page: c.page, score: c.score ?? null, trouve_par: c.trouve_par })),\n} }];\n"
+      },
+      "id": "fe4c01e3-ea29-421b-b26b-b24da22ca3ed",
+      "name": "Top N",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "48dfb9ad-82fc-44fd-b2d2-241998fe429e",
+              "name": "output",
+              "value": "={{ ($('Génération').first().json.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6c732758-8159-4839-a3f0-2ca82cd9c655",
+      "name": "Réponse",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        3200,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "39bce3e8-c0d9-4e1e-8c51-8a52732b4e6d",
+              "name": "output",
+              "value": "Je réponds uniquement à partir du livre « The Almanack of Naval Ravikant » : s'enrichir, le levier, le savoir spécifique, le jugement, la prise de décision, le bonheur, les habitudes, la philosophie de Naval… Cette question sort de ce cadre. Essaie par exemple : « Comment devenir riche sans compter sur la chance ? » ou « Selon Naval, le bonheur s'apprend-il ? »",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9a99eeb8-55d8-4a10-bcc5-5c191341a607",
+      "name": "Refus hors sujet",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1664,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ANSWERING (rapide)\nContexte (messages + config) → Routing (mots-clés, filtres, requêtes) → Search (vecteurs + mots-clés, fusion RRF) → Reranking (Cohere rerank-v3.5, petit modèle dédié) → Génération (Gemini)\n\nContexte : question + 4 derniers échanges (chat_messages) + réglages (top_k, top_n, seuil). Routing : un seul appel Gemini → question autonome FR/EN, requête, mots-clés, filtre de chapitre, hors-sujet évident. Search : 15 par le sens + 15 par les mots. Reranking : Cohere garde les 4 passages qui ont vraiment la réponse (score ≥ seuil) ; si Cohere ne répond pas, on garde l'ordre de la fusion. Génération : réponse en français avec sources.",
+        "height": 200,
+        "width": 3500,
+        "color": 4
+      },
+      "id": "b7915dca-92ff-4fe1-bcee-f96645aee65f",
+      "name": "Sticky Note c1b98b6b",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -512
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cohere.com/v2/rerank",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "cohereApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $json.config.rerank_model, query: $json.question_en, documents: $json.documents, top_n: $json.config.top_n }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "cd013d10-4611-4118-8e2e-159c7d7bc58a",
+      "name": "Reranking (Cohere)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2096,
+        -96
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "cohereApi": {
+          "name": "Cohere account - RAG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- CONTEXTE : 4 derniers échanges (8 messages) de la session, du plus ancien au plus récent\nselect role, content\nfrom (\n  select id, role, content\n  from chat_messages\n  where session_id = $1\n  order by id desc\n  limit 8\n) t\norder by id;",
+        "options": {
+          "queryReplacement": "={{ [$json.sessionId] }}"
+        }
+      },
+      "id": "3375098f-8054-49f3-a7cd-b8ac294a0bbc",
+      "name": "Historique",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        288,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- SEARCH (plein texte) : passages qui contiennent les mots-clés du routing, filtrés par métadonnées\nselect id, content, metadata, rank\nfrom keyword_search_filtre($1, $2::int, $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ [ $('Parse routing').first().json.mots_cles, $('Parse routing').first().json.config.top_k, JSON.stringify($('Parse routing').first().json.filtre) ] }}"
+        }
+      },
+      "id": "631c0195-8a8c-4fc4-bae6-9cccc853e013",
+      "name": "Recherche mots-clés",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1920,
+        -96
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Mémoire : la question et la réponse en une seule requête\ninsert into chat_messages (session_id, role, content)\nvalues ($1, 'user', $2), ($1, 'assistant', $3);",
+        "options": {
+          "queryReplacement": "={{ [ $('Parse routing').first().json.sessionId, $('Parse routing').first().json.question, ($('Génération').first().json.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('') ] }}"
+        }
+      },
+      "id": "f68be9e9-d825-4e49-b6e4-45aeebf66528",
+      "name": "Mémoriser l'échange",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2976,
+        -96
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemini-3.5-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Historique récent :\n{{ $json.history }}\n\nNouvelle question : {{ $json.question }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "Tu es l'étape ROUTING d'un chatbot RAG qui répond à partir d'un seul livre, écrit en anglais : « The Almanack of Naval Ravikant » (Eric Jorgenson, 2020), qui rassemble les idées de Naval Ravikant, entrepreneur et investisseur (cofondateur d'AngelList).\nLe livre couvre : s'enrichir sans compter sur la chance, savoir spécifique, levier (code, médias, capital, main-d'œuvre), equity, responsabilité, jeux à long terme, chance, patience, jugement, pensée claire, prise de décision, modèles mentaux, lecture et apprentissage, bonheur, paix intérieure, désir, envie, habitudes, acceptation, santé et sport, méditation, croissance personnelle, liberté, sens de la vie, valeurs, philosophie, parcours de Naval, ses lectures recommandées.\nParties du livre (numéro interne → titre) : 1 Important Notes on This Book, 2 Foreword, 3 Eric's Note, 4 Timeline of Naval Ravikant, 5 Now, Here Is Naval in His Own Words, 6 Building Wealth, 7 Building Judgment, 8 Learning Happiness, 9 Saving Yourself, 10 Philosophy, 11 Bonus, 12 Naval's Recommended Reading, 13 Naval's Writing, 14 Next on Naval.\n\nOn te donne l'historique récent de la conversation et la nouvelle question. Prépare la recherche :\n1. in_scope : false UNIQUEMENT si la question n'a clairement aucun rapport avec les thèmes du livre (recette de cuisine, résultat sportif, météo, aide sur un logiciel, salutations seules…). Dans le doute, true. Une question de vie pratique (« comment devenir riche ? », « comment être plus heureux ? », « dois-je lancer ma boîte ? ») est in_scope = true.\n2. standalone_fr : la question réécrite en FRANÇAIS pour qu'elle se comprenne seule, en réintégrant ce que l'historique sous-entend (« Et comment on l'acquiert ? » → « Comment acquérir du savoir spécifique selon Naval ? »).\n3. question_en : la même question, complète et naturelle, en ANGLAIS.\n4. query_en : une requête de recherche courte en ANGLAIS, avec le vocabulaire de Naval (wealth, leverage, specific knowledge, judgment, happiness, desire, peace…).\n5. mots_cles_en : 3 à 8 mots-clés ou expressions en ANGLAIS (termes du livre et synonymes), pour une recherche plein texte.\n6. filtres.chapitre : le numéro interne de la partie UNIQUEMENT si l'utilisateur cite explicitement une partie du livre (« dans Building Wealth » → 6), sinon null.\n\nRéponds UNIQUEMENT avec un JSON valide, sans texte autour :\n{\"in_scope\": true, \"standalone_fr\": \"...\", \"question_en\": \"...\", \"query_en\": \"...\", \"mots_cles_en\": [\"...\"], \"filtres\": {\"chapitre\": null}}\n",
+          "maxOutputTokens": 1024,
+          "temperature": 0
+        }
+      },
+      "id": "203fea79-a0d5-49ed-bdf9-ee3c4d516960",
+      "name": "Routing",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        816,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemini-3.5-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Question de l'utilisateur : {{ $json.question }}\n\nContexte (extraits des livres) :\n{{ $json.context }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "Tu es un coach qui répond UNIQUEMENT à partir des extraits du livre « The Almanack of Naval Ravikant » (Eric Jorgenson) fournis dans le contexte. Tu transmets fidèlement les idées de Naval Ravikant.\n\nRègles :\n- Réponds en français, de façon claire et structurée (titres courts ou étapes numérotées si utile), en 250 mots maximum.\n- N'utilise que les informations du contexte. N'invente rien, n'ajoute pas de connaissances extérieures.\n- Tu peux citer une phrase courte de Naval en anglais, entre guillemets, si elle résume l'idée, suivie de sa traduction.\n- Termine par une ligne de sources : 📖 Sources : puis, pour chaque extrait réellement utilisé, sa référence recopiée telle qu'elle est écrite après « Source : » (livre, partie, section, page), séparées par « ; ».\n- Si le contexte vaut « AUCUN PASSAGE PERTINENT » ou ne permet pas de répondre, dis poliment que le livre ne traite pas cette question et propose 2 ou 3 sujets proches qu'il couvre. Dans ce cas, n'écris AUCUNE ligne de sources.\n",
+          "maxOutputTokens": 2048,
+          "temperature": 0.3
+        }
+      },
+      "id": "9837d218-14e3-4079-82f2-a362f12875bd",
+      "name": "Génération",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        2624,
+        -96
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Dans le périmètre ?": {
+      "main": [
+        [
+          {
+            "node": "Recherche",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Refus hors sujet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Recherche",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse routing": {
+      "main": [
+        [
+          {
+            "node": "Dans le périmètre ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Candidats": {
+      "main": [
+        [
+          {
+            "node": "Reranking (Cohere)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranking (Cohere)": {
+      "main": [
+        [
+          {
+            "node": "Top N",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Question reçue": {
+      "main": [
+        [
+          {
+            "node": "Historique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Historique": {
+      "main": [
+        [
+          {
+            "node": "Contexte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recherche": {
+      "main": [
+        [
+          {
+            "node": "Recherche mots-clés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recherche mots-clés": {
+      "main": [
+        [
+          {
+            "node": "Candidats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mémoriser l'échange": {
+      "main": [
+        [
+          {
+            "node": "Réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contexte": {
+      "main": [
+        [
+          {
+            "node": "Routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Routing": {
+      "main": [
+        [
+          {
+            "node": "Parse routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Top N": {
+      "main": [
+        [
+          {
+            "node": "Génération",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Génération": {
+      "main": [
+        [
+          {
+            "node": "Mémoriser l'échange",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "nodeGroups": [
+    {
+      "id": "8401f951-76ba-45e1-921f-fe3aec562b2c",
+      "name": "1 · Contexte",
+      "nodeNames": [
+        "Historique",
+        "Contexte"
+      ],
+      "description": "Messages (historique Postgres) + config"
+    },
+    {
+      "id": "7927ed17-325d-416c-bcc5-fca1c3ed80b9",
+      "name": "2 · Routing",
+      "nodeNames": [
+        "Routing",
+        "Parse routing"
+      ],
+      "description": "Gemini (JSON) : mots-clés, filtres, requêtes, hors-sujet"
+    },
+    {
+      "id": "600b6aa0-d8bf-452c-81a9-cef54c1caf51",
+      "name": "3 · Search",
+      "nodeNames": [
+        "Recherche",
+        "Embeddings Gemini",
+        "Recherche mots-clés",
+        "Candidats"
+      ],
+      "description": "Vecteurs + mots-clés (Postgres), fusion RRF"
+    },
+    {
+      "id": "b9562b6a-fdcf-4581-b0ea-bc8baa53a96b",
+      "name": "4 · Reranking",
+      "nodeNames": [
+        "Reranking (Cohere)",
+        "Top N"
+      ],
+      "description": "Cohere rerank-v3.5"
+    },
+    {
+      "id": "626dbc1b-ad28-49eb-9e0a-36af805319af",
+      "name": "5 · Génération",
+      "nodeNames": [
+        "Génération",
+        "Mémoriser l'échange",
+        "Réponse"
+      ],
+      "description": "Gemini + mémoire (Postgres)"
+    }
+  ]
+}
