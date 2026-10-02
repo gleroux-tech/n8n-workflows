@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 488" width="760" height="488" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+<title>Chatbot RAG : ingestion, base Supabase et answering</title>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9aa1ab"/></marker></defs>
+<rect width="760" height="488" fill="#ffffff"/>
+<text x="24" y="30" font-size="15" font-weight="600" fill="#1f2328">Le livre est rangé une fois ; chaque question y puise ensuite</text>
+<rect x="24" y="52" width="712" height="112" rx="8" fill="none" stroke="#dfe2e6" stroke-width="1.25"/>
+<text x="36" y="76" font-weight="600" fill="#1f2328">1 · Ingestion — une fois par livre, par lots</text>
+<rect x="24" y="312" width="712" height="152" rx="8" fill="none" stroke="#dfe2e6" stroke-width="1.25"/>
+<text x="36" y="452" font-weight="600" fill="#1f2328">2 · Answering — à chaque question</text>
+<rect x="36" y="92" width="124" height="56" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="98.0" y="116" text-anchor="middle" font-weight="600" fill="#1f2328">Formulaire</text>
+<text x="98.0" y="134" text-anchor="middle" font-size="11.5" fill="#59636e">titre + PDF</text>
+<rect x="177" y="92" width="124" height="56" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="239.0" y="116" text-anchor="middle" font-weight="600" fill="#1f2328">Extraction</text>
+<text x="239.0" y="134" text-anchor="middle" font-size="11.5" fill="#59636e">PDF → texte</text>
+<rect x="318" y="92" width="124" height="56" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="380.0" y="116" text-anchor="middle" font-weight="600" fill="#1f2328">Chunking</text>
+<text x="380.0" y="134" text-anchor="middle" font-size="11.5" fill="#59636e">≤ 5 000 caractères</text>
+<rect x="459" y="92" width="124" height="56" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="521.0" y="116" text-anchor="middle" font-weight="600" fill="#1f2328">Augmentation</text>
+<text x="521.0" y="134" text-anchor="middle" font-size="11.5" fill="#59636e">Gemini annote</text>
+<rect x="600" y="92" width="124" height="56" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="662.0" y="116" text-anchor="middle" font-weight="600" fill="#1f2328">Vectorisation</text>
+<text x="662.0" y="134" text-anchor="middle" font-size="11.5" fill="#59636e">sous-workflow 1b</text>
+<rect x="36.0" y="360" width="104" height="72" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="88.0" y="384" text-anchor="middle" font-weight="600" fill="#1f2328">Question</text>
+<text x="88.0" y="402" text-anchor="middle" font-size="11.5" fill="#59636e">chat public</text>
+<text x="88.0" y="418" text-anchor="middle" font-size="11.5" fill="#59636e">entrée</text>
+<rect x="152.8" y="360" width="104" height="72" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="204.8" y="384" text-anchor="middle" font-weight="600" fill="#1f2328">Contexte</text>
+<text x="204.8" y="402" text-anchor="middle" font-size="11.5" fill="#59636e">historique</text>
+<text x="204.8" y="418" text-anchor="middle" font-size="11.5" fill="#59636e">Postgres</text>
+<rect x="269.6" y="360" width="104" height="72" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="321.6" y="384" text-anchor="middle" font-weight="600" fill="#1f2328">Routing</text>
+<text x="321.6" y="402" text-anchor="middle" font-size="11.5" fill="#59636e">requêtes, filtre</text>
+<text x="321.6" y="418" text-anchor="middle" font-size="11.5" fill="#59636e">Gemini JSON</text>
+<rect x="386.4" y="360" width="104" height="72" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="438.4" y="384" text-anchor="middle" font-weight="600" fill="#1f2328">Search</text>
+<text x="438.4" y="402" text-anchor="middle" font-size="11.5" fill="#59636e">sens + mots</text>
+<text x="438.4" y="418" text-anchor="middle" font-size="11.5" fill="#59636e">fusion RRF</text>
+<rect x="503.2" y="360" width="104" height="72" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="555.2" y="384" text-anchor="middle" font-weight="600" fill="#1f2328">Reranking</text>
+<text x="555.2" y="402" text-anchor="middle" font-size="11.5" fill="#59636e">top 4</text>
+<text x="555.2" y="418" text-anchor="middle" font-size="11.5" fill="#59636e">Cohere</text>
+<rect x="620.0" y="360" width="104" height="72" rx="8" fill="#ffffff" stroke="#9aa1ab" stroke-width="1.25"/>
+<text x="672.0" y="384" text-anchor="middle" font-weight="600" fill="#1f2328">Génération</text>
+<text x="672.0" y="402" text-anchor="middle" font-size="11.5" fill="#59636e">réponse sourcée</text>
+<text x="672.0" y="418" text-anchor="middle" font-size="11.5" fill="#59636e">Gemini</text>
+<path d="M160 120H177" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M301 120H318" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M442 120H459" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M583 120H600" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M140 396H152.8" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M256.8 396H269.6" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M373.6 396H386.4" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M490.4 396H503.2" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M607.2 396H620" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M662 148V238H490" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M672 360V262H490" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M438.4 276V360" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<path d="M290 250H204.8V360" fill="none" stroke="#9aa1ab" stroke-width="1.25" marker-end="url(#arrow)"/>
+<rect x="290" y="200" width="200" height="76" rx="8" fill="#eaf1fd" stroke="#2f6fde" stroke-width="2"/>
+<text x="390" y="224" text-anchor="middle" font-weight="600" fill="#1f2328">Supabase (Postgres)</text>
+<text x="390" y="242" text-anchor="middle" font-size="11.5" fill="#1f2328">documents : chunks + vecteurs</text>
+<text x="390" y="258" text-anchor="middle" font-size="11.5" fill="#1f2328">chat_messages : mémoire</text>
+<text x="576" y="230" text-anchor="middle" font-size="11.5" fill="#59636e">écrit les chunks</text>
+<text x="581" y="278" text-anchor="middle" font-size="11.5" fill="#59636e">mémorise l'échange</text>
+<text x="446" y="298" text-anchor="start" font-size="11.5" fill="#59636e">lit les chunks</text>
+<text x="196" y="298" text-anchor="end" font-size="11.5" fill="#59636e">lit l'historique</text>
+</svg>
